@@ -9,47 +9,6 @@
     "extraRevenue": 0
   },
   "members": [],
-  "queue": [
-    {
-      "id": "q1792237701235",
-      "memberId": null,
-      "name": "Adryel",
-      "tag": "Avulso R$ 40",
-      "service": "Relocado c/ antecedência (Sábado (Manhã)) • Crédito mantido",
-      "status": "relocated",
-      "joinedAt": "08:48",
-      "estMin": 0
-    },
-    {
-      "id": "q1792238013995",
-      "memberId": null,
-      "name": "Gustavo",
-      "tag": "Avulso R$ 40",
-      "service": "Corte Mid Fade + Crop Texturizado (R$ 40)",
-      "status": "waiting",
-      "joinedAt": "08:53",
-      "estMin": 18
-    },
-    {
-      "id": "q1792238024659",
-      "memberId": null,
-      "name": "Gabriel",
-      "tag": "Avulso R$ 40",
-      "service": "Corte Mid Fade + Crop Texturizado (R$ 40)",
-      "status": "waiting",
-      "joinedAt": "08:53",
-      "estMin": 36
-    },
-    {
-      "id": "q1792238028810",
-      "memberId": null,
-      "name": "Junior",
-      "tag": "Avulso R$ 40",
-      "service": "Corte Mid Fade + Crop Texturizado (R$ 40)",
-      "status": "waiting",
-      "joinedAt": "08:53",
-      "estMin": 54
-    }
-  ],
+  "queue": [],
   "transactions": []
 }
