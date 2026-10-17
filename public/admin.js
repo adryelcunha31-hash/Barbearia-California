@@ -101,7 +101,7 @@ function renderAdmin() {
           </div>
           <p class="text-xs opacity-75">${m.plan} • <strong>R$ ${Number(m.price).toFixed(2)}/mês</strong> • Cortes: <strong>${m.cutsUsed}/${m.cutsLimit}</strong> • WhatsApp: ${m.phone || '-'}</p>
           <p class="text-[11px] text-[#c85a32] font-semibold truncate">🧠 Visagismo IA: Rosto ${m.visagism?.shape || 'Oval'} → ${m.visagism?.cut || 'Taper Fade'}</p>
-          <p class="text-[11px] text-emerald-400 font-semibold">📅 Dias Reservados (${(m.scheduledDays || []).length}/${m.cutsLimit}): ${(m.scheduledDays && m.scheduledDays.length) ? m.scheduledDays.join(' • ') : 'Nenhum dia agendado ainda'}</p>
+          <p class="text-[11px] text-emerald-400 font-semibold">📅 Horários Reservados (${(m.scheduledDays || []).length}/${m.cutsLimit}): ${(m.scheduledDays && m.scheduledDays.length) ? m.scheduledDays.join(' • ') : 'Nenhum horário agendado ainda'}</p>
           ${(m.storeOrders && m.storeOrders.length) ? `<p class="text-[11px] opacity-85">🍺 Comanda/Bar: ${m.storeOrders.slice(0, 3).map(o => `${o.item} (R$ ${Number(o.price).toFixed(2)})`).join(', ')}</p>` : ''}
         </div>
         <div class="flex items-center gap-2 shrink-0">
@@ -111,7 +111,7 @@ function renderAdmin() {
             </button>
           ` : ''}
           <button onclick="markPaid('${m.id}')" class="btn-outline font-bold px-3 py-2 rounded-xl text-xs">
-            Baixa PIX
+            ${m.status === 'pending_payment' ? '✅ Ativar Plano' : 'Baixa PIX'}
           </button>
           <button onclick="deleteMemberAdmin('${m.id}')" class="btn-outline font-bold px-2.5 py-2 rounded-xl text-xs text-rose-500" title="Excluir cliente">
             🗑️

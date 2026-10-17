@@ -180,7 +180,18 @@ async function ensureAsaasCustomer(m, asaasHeaders) {
 
 // Blindagem Anti-Vazamento de Dados (LGPD): Remove CPFs, PINs, Telefones e Livro Caixa da rota pública
 function sanitizeDbForRole(db, req) {
-  if (isAdminRequest(req)) return db;
+  const bookedSlots = [];
+  (db.members || []).forEach(m => {
+    if (m.status === 'active' || m.status === 'rescheduled') {
+      (m.scheduledDays || []).forEach(slot => {
+        bookedSlots.push({ memberId: m.id, slot });
+      });
+    }
+  });
+
+  if (isAdminRequest(req)) {
+    return { ...db, bookedSlots };
+  }
   return {
     shop: {
       name: db.shop.name,
@@ -204,6 +215,7 @@ function sanitizeDbForRole(db, req) {
       scheduledDays: m.scheduledDays || [],
       storeOrders: m.storeOrders || []
     })),
+    bookedSlots,
     queue: db.queue,
     transactions: []
   };
@@ -272,7 +284,27 @@ const server = http.createServer((req, res) => {
         return send(200, db);
       }
 
-      // Login do Cliente
+      if (req.method === 'POST' && urlPath === '/api/admin/activate-member') {
+        if (!isAdminRequest(req)) return send(403, { error: 'Não autorizado.' });
+        const m = db.members.find(x => x.id === payload.memberId);
+        if (m) {
+          m.status = 'active';
+          m.daysOverdue = 0;
+          m.dueDate = new Date(Date.now() + 30 * 86400000).toLocaleDateString('pt-BR');
+          db.transactions.unshift({
+            id: 't' + Date.now(),
+            date: `Hoje ${nowTime()}`,
+            desc: `Ativação Presencial / Balcão — ${m.name}`,
+            type: 'assinatura',
+            method: 'Liberado pelo Admin (Rogério)',
+            amount: Number(m.price || 109.90)
+          });
+          saveDb(db);
+        }
+        return send(200, db);
+      }
+
+      // Login do Cliente (Exige Plano Ativo Pago! Não permite entrar em conta sem plano)
       if (req.method === 'POST' && urlPath === '/api/client/login') {
         const attempts = loginAttempts.get('cli_' + ip) || 0;
         if (attempts >= 10) return send(429, { error: 'Muitas tentativas. Aguarde 1 minuto.' });
@@ -283,19 +315,39 @@ const server = http.createServer((req, res) => {
         const member = db.members.find(m => m.id === payload.memberId || m.phone.endsWith(phoneClean.slice(-9)));
         if (!member) {
           loginAttempts.set('cli_' + ip, attempts + 1);
-          return send(404, { error: 'Conta não encontrada. Clique na aba "Criar Minha Conta" para se cadastrar!' });
+          return send(404, { error: 'Nenhum assinante encontrado com este WhatsApp. Clique na aba "Assinar Plano" para ativar sua conta!' });
         }
         if (payload.pin && !safeCompare(payload.pin, member.pin || '1234')) {
           loginAttempts.set('cli_' + ip, attempts + 1);
           return send(401, { error: 'PIN incorreto.' });
         }
         loginAttempts.delete('cli_' + ip);
+
+        // Se a conta ainda não pagou o plano, bloqueia o login e direciona direto para o Checkout Asaas!
+        if (member.status === 'pending_payment') {
+          return send(200, {
+            ok: false,
+            requiresPayment: true,
+            memberId: member.id,
+            name: member.name,
+            plan: member.plan,
+            price: member.price,
+            state: sanitizeDbForRole(db, req)
+          });
+        }
+
         const token = crypto.randomBytes(20).toString('hex');
         activeSessions.add(token);
-        return send(200, { ok: true, token, memberId: member.id, name: member.name });
+        return send(200, {
+          ok: true,
+          token,
+          memberId: member.id,
+          name: member.name,
+          state: sanitizeDbForRole(db, req)
+        });
       }
 
-      // Cadastro de Novo Cliente (Inicia como 'pending_payment' até confirmar PIX ou Cartão no Asaas!)
+      // Cadastro de Novo Assinante (Inicia como 'pending_payment' — a conta só é ativada após confirmar PIX ou Cartão no Asaas!)
       if (req.method === 'POST' && urlPath === '/api/client/register') {
         const name = clean(payload.name);
         const cpf = String(payload.cpf || '').replace(/\D/g, '');
@@ -307,17 +359,29 @@ const server = http.createServer((req, res) => {
         if (!isValidCpf(cpf)) return send(400, { error: 'CPF inválido. Digite um CPF real de 11 dígitos para emissão da cobrança Asaas.' });
         if (phone.length < 10) return send(400, { error: 'Informe seu WhatsApp válido com DDD.' });
 
-        // Se já existir conta com mesmo CPF ou telefone, atualiza e reutiliza
+        // Se já existir conta com mesmo CPF ou telefone, atualiza os dados (mantendo pending_payment se ainda não pagou)
         let existing = db.members.find(m => m.cpf === cpf || m.phone.endsWith(phone.slice(-9)));
         if (existing) {
           existing.name = name;
           existing.cpf = cpf;
           existing.phone = phone.startsWith('55') ? phone : '55' + phone;
           existing.pin = pin || existing.pin;
+          if (existing.status !== 'active' && existing.status !== 'rescheduled') {
+            existing.plan = isGold ? 'Califórnia Gold (4 Cortes/mês)' : 'Califórnia Club (2 Cortes/mês)';
+            existing.price = isGold ? 109.90 : 69.90;
+            existing.cutsLimit = isGold ? 4 : 2;
+            existing.status = 'pending_payment';
+          }
           saveDb(db);
           const token = crypto.randomBytes(20).toString('hex');
           activeSessions.add(token);
-          return send(200, { ok: true, token, memberId: existing.id, state: db });
+          return send(200, {
+            ok: true,
+            token,
+            memberId: existing.id,
+            status: existing.status,
+            state: sanitizeDbForRole(db, req)
+          });
         }
 
         const initials = name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
@@ -350,7 +414,13 @@ const server = http.createServer((req, res) => {
         saveDb(db);
         const token = crypto.randomBytes(20).toString('hex');
         activeSessions.add(token);
-        return send(200, { ok: true, token, memberId: newMember.id, state: db });
+        return send(200, {
+          ok: true,
+          token,
+          memberId: newMember.id,
+          status: newMember.status,
+          state: sanitizeDbForRole(db, req)
+        });
       }
 
       // GERAÇÃO DE QR CODE PIX REAL NA API DE PRODUÇÃO DO ASAAS
@@ -584,20 +654,33 @@ const server = http.createServer((req, res) => {
         return send(200, db);
       }
 
-      // AGENDAMENTO DOS DIAS DO MÊS DO ASSINANTE (4 dias no Gold VIP / 2 dias no Club)
+      // AGENDAMENTO DOS DIAS + HORÁRIOS DO MÊS DO ASSINANTE (4 horários no Gold VIP / 2 no Club)
       if (req.method === 'POST' && urlPath === '/api/member/schedule-days') {
         const m = db.members.find(x => x.id === payload.memberId);
-        if (!m || m.status !== 'active') {
-          return send(403, { error: 'Ative sua assinatura (Gold VIP ou Club) para reservar seus dias fixos do mês na agenda!' });
+        if (!m || (m.status !== 'active' && m.status !== 'rescheduled')) {
+          return send(403, { error: 'Ative sua assinatura (Gold VIP ou Club) para reservar seus dias e horários do mês!' });
         }
         const days = Array.isArray(payload.days) ? payload.days.map(d => clean(d)).filter(Boolean) : [];
         const maxDays = m.cutsLimit || (m.plan.includes('Gold') ? 4 : 2);
         if (days.length > maxDays) {
-          return send(400, { error: `Seu plano permite reservar até ${maxDays} dias por mês.` });
+          return send(400, { error: `Seu plano permite reservar até ${maxDays} horários por mês.` });
         }
+
+        // Verifica se algum outro cliente já reservou exatamente o mesmo Dia + Horário (ex: "Sáb 17/10 às 09:30")
+        const takenByOthers = new Set();
+        db.members.forEach(other => {
+          if (other.id !== m.id && (other.status === 'active' || other.status === 'rescheduled')) {
+            (other.scheduledDays || []).forEach(s => takenByOthers.add(s));
+          }
+        });
+        const conflict = days.find(s => takenByOthers.has(s));
+        if (conflict) {
+          return send(409, { error: `O horário "${conflict}" já foi reservado por outro cliente! Escolha outro horário livre.` });
+        }
+
         m.scheduledDays = days;
         saveDb(db);
-        return send(200, db);
+        return send(200, { ok: true, state: sanitizeDbForRole(db, req) });
       }
 
       // RESERVA DE BEBIDAS E PRODUTOS FÍSICOS COM DESCONTO VIP (10% Gold VIP / 5% Club)

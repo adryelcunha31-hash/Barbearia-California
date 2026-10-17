@@ -210,9 +210,28 @@ let selectedPaymentMethod = 'PIX_AUTOMATICO';
 let clientAuthToken = localStorage.getItem('cal_client_token') || '';
 let currentPixPaymentId = null;
 let selectedCalendarDays = [];
+let activeInspectDay = '';
+
+function updateState(res) {
+  if (!res) return;
+  if (Array.isArray(res.members)) {
+    state = res;
+  } else if (res.state && Array.isArray(res.state.members)) {
+    state = res.state;
+  }
+}
+
+function getActiveMember() {
+  const list = Array.isArray(state?.members) ? state.members : [];
+  const m = list.find(x => x.id === currentMemberId);
+  if (m && (m.status === 'active' || m.status === 'rescheduled' || m.status === 'overdue')) {
+    return m;
+  }
+  return null;
+}
 
 function handleAccountButtonClick() {
-  const m = state.members.find(x => x.id === currentMemberId);
+  const m = getActiveMember();
   if (m) {
     const vipSection = document.getElementById('vip-area-section');
     if (vipSection) {
@@ -245,7 +264,7 @@ function openLoginModal(initialTab = 'login', preselectedPlan = null) {
 
   const wrapper = document.getElementById('demo-accounts-wrapper');
   const list = document.getElementById('demo-accounts-list');
-  const m = state.members.find(x => x.id === currentMemberId);
+  const m = getActiveMember();
   if (m && wrapper && list) {
     wrapper.classList.remove('hidden');
     list.innerHTML = `
@@ -280,13 +299,29 @@ async function submitClientLogin() {
     const phone = document.getElementById('login-phone').value;
     const pin = document.getElementById('login-pin').value;
     const res = await api('/api/client/login', { phone, pin });
+    updateState(res);
+
+    // Bloqueia entrada se a conta ainda não pagou nenhum plano!
+    if (res.requiresPayment) {
+      closeLoginModal();
+      const isGold = String(res.plan || '').includes('Gold');
+      openCheckoutModal(
+        res.plan || 'Califórnia Gold VIP (4x/mês)',
+        res.price || (isGold ? 109.90 : 69.90),
+        isGold ? 'plan_gold' : 'plan_club',
+        res.memberId
+      );
+      toast('🔒 Conclua o pagamento do seu plano (PIX ou Cartão) para liberar o acesso à sua conta!');
+      return;
+    }
+
     currentMemberId = res.memberId;
     localStorage.setItem('cal_member_id', res.memberId);
     if (res.token) {
       clientAuthToken = res.token;
       localStorage.setItem('cal_client_token', res.token);
     }
-    const m = state.members.find(x => x.id === currentMemberId);
+    const m = (state.members || []).find(x => x.id === currentMemberId);
     selectedCalendarDays = Array.isArray(m?.scheduledDays) ? [...m.scheduledDays] : [];
     closeLoginModal();
     renderAll();
@@ -318,23 +353,31 @@ async function submitClientRegister() {
       cut: visData.cut,
       angles: lastTelemetryLabel || visData.angle
     });
-    state = res.state;
-    currentMemberId = res.memberId;
-    localStorage.setItem('cal_member_id', res.memberId);
-    if (res.token) {
-      clientAuthToken = res.token;
-      localStorage.setItem('cal_client_token', res.token);
+    updateState(res);
+
+    // NÃO loga o cliente antes de pagar! Só loga se já for assinante ativo.
+    if (res.status === 'active' || res.status === 'rescheduled') {
+      currentMemberId = res.memberId;
+      localStorage.setItem('cal_member_id', res.memberId);
+      closeLoginModal();
+      renderAll();
+      toast('👑 Sua assinatura já está ativa! Bem-vindo de volta.');
+      return;
     }
+
+    currentMemberId = 'avulso';
+    localStorage.removeItem('cal_member_id');
     closeLoginModal();
     renderAll();
+
     const isGold = planKey === 'gold';
     openCheckoutModal(
       isGold ? 'Califórnia Gold VIP (4x/mês)' : 'Califórnia Club (2x/mês)',
       isGold ? 109.90 : 69.90,
       isGold ? 'plan_gold' : 'plan_club',
-      currentMemberId
+      res.memberId
     );
-    toast('Cadastro validado! Realize o pagamento para ativar seu plano.');
+    toast('🔒 CPF validado! Agora confirme o pagamento (PIX ou Cartão) para ativar e liberar sua conta.');
   } catch (e) {
     toast(e.message);
   }
@@ -389,7 +432,7 @@ async function loadRealPixQrCode(title, amount, memberId) {
     const res = await api('/api/asaas/pix-qrcode', {
       memberId,
       amount,
-      description: `Barbearia Califórnia - ${title}`
+      title
     });
     currentPixPaymentId = res.paymentId;
     if (qrImg && res.encodedImage) {
@@ -400,9 +443,9 @@ async function loadRealPixQrCode(title, amount, memberId) {
     if (payloadInput) payloadInput.value = res.payload || '';
     if (statusHint) statusHint.textContent = '🟢 QR Code PIX pronto! Escaneie no app do seu banco e clique abaixo.';
   } catch (e) {
-    if (qrLoading) qrLoading.textContent = e.message || 'Crie sua conta c/ CPF válido para gerar o PIX.';
+    if (qrLoading) qrLoading.textContent = e.message || 'Informe seu CPF para gerar o PIX.';
     if (payloadInput) payloadInput.value = '';
-    if (statusHint) statusHint.textContent = '⚠️ Faça login ou cadastre seu CPF para emitir o QR Code PIX.';
+    if (statusHint) statusHint.textContent = '⚠️ Cadastre seu CPF para emitir o QR Code PIX.';
   }
 }
 
@@ -423,10 +466,11 @@ function switchPaymentMethod(method) {
 }
 
 function openCheckoutModal(title, amount, actionType, memberId = null) {
-  const m = state.members.find(x => x.id === (memberId || currentMemberId));
-  // Exige conta com CPF validado para gerar cobrança PIX ou Cartão no Asaas
+  const list = Array.isArray(state?.members) ? state.members : [];
+  const m = list.find(x => x.id === (memberId || currentMemberId));
+  // Exige cadastro com CPF validado para gerar cobrança PIX ou Cartão no Asaas
   if (!m) {
-    toast('Crie sua conta rápida (CPF + WhatsApp) para emitir o PIX ou pagar no Cartão!');
+    toast('Preencha seus dados (CPF + WhatsApp) para emitir o PIX ou pagar no Cartão!');
     openLoginModal('register', actionType === 'plan_club' ? 'club' : 'gold');
     return;
   }
@@ -435,8 +479,6 @@ function openCheckoutModal(title, amount, actionType, memberId = null) {
   document.getElementById('chk-desc').textContent = 'Asaas Pagamentos • Validação Bancária Oficial';
   document.getElementById('chk-amount').textContent = `R$ ${Number(amount).toFixed(2)}`;
   pendingCheckoutAction = { title, amount: Number(amount), actionType, memberId: m.id };
-  const cpfField = document.getElementById('cc-cpf');
-  if (cpfField && m.cpf && !cpfField.value) cpfField.value = m.cpf;
   const nameField = document.getElementById('cc-name');
   if (nameField && m.name && !nameField.value) nameField.value = m.name.toUpperCase();
 
@@ -466,12 +508,18 @@ async function confirmCheckoutPayment() {
       }
       const res = await api('/api/asaas/check-payment', {
         paymentId: currentPixPaymentId,
-        memberId
+        memberId,
+        plan: title,
+        amount
       });
-      state = res.state;
+      updateState(res);
+      currentMemberId = memberId;
+      localStorage.setItem('cal_member_id', memberId);
+      const m = (state.members || []).find(x => x.id === currentMemberId);
+      selectedCalendarDays = Array.isArray(m?.scheduledDays) ? [...m.scheduledDays] : [];
       closeCheckoutModal();
       renderAll();
-      toast('👑 Pagamento PIX confirmado pelo banco! Seu plano e Área VIP estão liberados!');
+      toast('👑 Pagamento PIX confirmado pelo banco! Sua conta e Área VIP estão liberadas!');
       setTimeout(() => {
         document.getElementById('vip-area-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }, 200);
@@ -509,7 +557,7 @@ async function confirmCheckoutPayment() {
       ? 'Califórnia Club (2 Cortes/mês)'
       : 'Corte Avulso';
 
-    state = await api('/api/asaas/subscribe', {
+    const res = await api('/api/asaas/subscribe', {
       memberId,
       plan: targetPlan,
       amount,
@@ -517,10 +565,15 @@ async function confirmCheckoutPayment() {
       methodLabel: 'Cartão de Crédito Asaas',
       creditCard: { number, holderName, expiry, cvv, cpf }
     });
+    updateState(res);
+    currentMemberId = memberId;
+    localStorage.setItem('cal_member_id', memberId);
+    const m = (state.members || []).find(x => x.id === currentMemberId);
+    selectedCalendarDays = Array.isArray(m?.scheduledDays) ? [...m.scheduledDays] : [];
 
     closeCheckoutModal();
     renderAll();
-    toast('👑 Cartão autorizado com sucesso! Seu plano VIP foi ativado!');
+    toast('👑 Cartão autorizado com sucesso! Sua conta VIP foi ativada!');
     setTimeout(() => {
       document.getElementById('vip-area-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 200);
@@ -554,10 +607,12 @@ async function init() {
   initLenisAndScroll();
   requestAnimationFrame(renderSeamlessHeroCanvas);
   initMediaPipeFaceLandmarker();
-  state = await api('/api/state');
-  const m = state.members.find(x => x.id === currentMemberId);
+  const res = await api('/api/state');
+  updateState(res);
+  const m = getActiveMember();
   if (!m) {
     currentMemberId = 'avulso';
+    localStorage.removeItem('cal_member_id');
   } else {
     selectedCalendarDays = Array.isArray(m.scheduledDays) ? [...m.scheduledDays] : [];
   }
@@ -573,7 +628,7 @@ function renderAll() {
 }
 
 function renderQueueAndMember() {
-  const m = state.members.find(x => x.id === currentMemberId);
+  const m = getActiveMember();
   const banner = document.getElementById('overdue-banner');
   const navName = document.getElementById('nav-user-name');
   const guestBox = document.getElementById('queue-guest-box');
@@ -1526,18 +1581,19 @@ async function saveVisagismChoice() {
     return;
   }
   const data = VISAGISM_DB[currentShape];
-  state = await api('/api/visagism/save', {
+  const res = await api('/api/visagism/save', {
     memberId: currentMemberId,
     shape: currentShape,
     cut: data.cut,
     angles: lastTelemetryLabel || data.angle,
     notes: data.desc
   });
+  updateState(res);
   renderQueueAndMember();
   toast(`👑 Corte "${data.cut}" salvo oficialmente na sua ficha Gold VIP!`);
 }
 
-// ================= PAINEL VIP DO ASSINANTE: ESCOLHA DOS 4 DIAS DO MÊS + BAR & PRODUTOS COM DESCONTO =================
+// ================= PAINEL VIP DO ASSINANTE: ESCOLHA DOS 4 DIAS + HORÁRIOS DO MÊS + BAR & PRODUTOS COM DESCONTO =================
 const BAR_STORE_PRODUCTS = [
   { id: 'heineken', name: 'Cerveja Heineken Long Neck (Trincando)', category: '🍺 Bebida Gelada', basePrice: 12.00, icon: '🍺' },
   { id: 'corona', name: 'Corona Extra Long Neck 330ml', category: '🍺 Bebida Gelada', basePrice: 13.00, icon: '🍻' },
@@ -1545,6 +1601,21 @@ const BAR_STORE_PRODUCTS = [
   { id: 'coca', name: 'Coca-Cola Zero / Guaraná Lata', category: '🥤 Bebida Gelada', basePrice: 6.50, icon: '🥤' },
   { id: 'pomada', name: 'Pomada Modeladora Matte Califórnia (120g)', category: '💈 Produto Físico', basePrice: 45.00, icon: '💈' },
   { id: 'balm', name: 'Kit Óleo & Balm Hidratante p/ Barba', category: '🧔 Produto Físico', basePrice: 55.00, icon: '🧴' }
+];
+
+// Grade de horários diários (Manhã até 11:00 | Parada Almoço 12:00-13:30 | Tarde/Noite a partir de 13:30)
+const DAILY_TIME_SLOTS = [
+  { time: '08:30', period: 'Manhã' },
+  { time: '09:30', period: 'Manhã' },
+  { time: '10:15', period: 'Manhã' },
+  { time: '11:00', period: 'Manhã' },
+  { time: '13:30', period: 'Tarde' },
+  { time: '14:30', period: 'Tarde' },
+  { time: '15:30', period: 'Tarde' },
+  { time: '16:30', period: 'Tarde' },
+  { time: '17:30', period: 'Noite' },
+  { time: '18:30', period: 'Noite' },
+  { time: '19:30', period: 'Noite' }
 ];
 
 function getAvailableMonthDays() {
@@ -1568,44 +1639,72 @@ function getAvailableMonthDays() {
   return days;
 }
 
-function toggleCalendarDay(dayLabel) {
-  const m = state.members.find(x => x.id === currentMemberId);
+function selectInspectDay(dayLabel) {
+  activeInspectDay = dayLabel;
+  renderVipArea();
+}
+
+function toggleDayTimeSlot(dayLabel, timeStr) {
+  const m = getActiveMember();
   if (!m) {
-    toast('Faça login ou assine um plano para reservar seus dias no mês!');
-    openLoginModal('login');
+    toast('🔒 Assine um plano ou entre na sua conta de assinante para reservar dias e horários!');
+    openLoginModal('register', 'gold');
     return;
   }
   if (m.status !== 'active' && m.status !== 'rescheduled') {
-    toast('⏳ Conclua o pagamento da sua assinatura para liberar a agenda de dias do mês!');
+    toast('⏳ Conclua o pagamento da sua assinatura para liberar a agenda de horários!');
     openCheckoutModal(m.plan, m.price, m.plan.includes('Gold') ? 'plan_gold' : 'plan_club', m.id);
     return;
   }
 
+  const slotLabel = `${dayLabel} às ${timeStr}`;
   const maxDays = m.cutsLimit || (m.plan.includes('Gold') ? 4 : 2);
-  const idx = selectedCalendarDays.indexOf(dayLabel);
+
+  // Verifica se já está selecionado pelo próprio cliente (clicar de novo desmarca)
+  const existingIdx = selectedCalendarDays.indexOf(slotLabel);
+  if (existingIdx >= 0) {
+    selectedCalendarDays.splice(existingIdx, 1);
+    renderVipArea();
+    return;
+  }
+
+  // Verifica se outro cliente já ocupou este exato Dia + Horário
+  const bookedByOther = (state?.bookedSlots || []).some(
+    b => b.slot === slotLabel && b.memberId !== m.id
+  );
+  if (bookedByOther) {
+    return toast(`🔒 O horário ${slotLabel} já está ocupado! Escolha outro horário livre neste dia.`);
+  }
+
+  if (selectedCalendarDays.length >= maxDays) {
+    return toast(`Seu plano dá direito a ${maxDays} horários no mês! Toque em um horário já escolhido para trocar.`);
+  }
+
+  selectedCalendarDays.push(slotLabel);
+  renderVipArea();
+  toast(`⏰ Selecionado: ${slotLabel} (${selectedCalendarDays.length}/${maxDays}). Clique em "Confirmar Dias & Horários" para salvar!`);
+}
+
+function removeScheduledSlot(slotLabel) {
+  const idx = selectedCalendarDays.indexOf(slotLabel);
   if (idx >= 0) {
     selectedCalendarDays.splice(idx, 1);
-  } else {
-    if (selectedCalendarDays.length >= maxDays) {
-      return toast(`Seu plano dá direito a ${maxDays} dias no mês! Desmarque um dia para trocar.`);
-    }
-    selectedCalendarDays.push(dayLabel);
+    renderVipArea();
   }
-  renderVipArea();
 }
 
 async function saveSubscriberMonthlyDays() {
-  const m = state.members.find(x => x.id === currentMemberId);
+  const m = getActiveMember();
   if (!m) {
-    toast('Faça login na sua conta de assinante para salvar seus dias do mês!');
+    toast('🔒 Faça login com um plano ativo para salvar seus dias e horários do mês!');
     return openLoginModal('login');
   }
   if (m.status !== 'active' && m.status !== 'rescheduled') {
-    toast('⏳ Ative sua assinatura no PIX ou Cartão antes de reservar seus dias no mês!');
+    toast('⏳ Ative sua assinatura no PIX ou Cartão antes de reservar seus horários no mês!');
     return openCheckoutModal(m.plan, m.price, m.plan.includes('Gold') ? 'plan_gold' : 'plan_club', m.id);
   }
   if (selectedCalendarDays.length === 0) {
-    return toast('Selecione pelo menos 1 dia livre no calendário acima!');
+    return toast('Escolha pelo menos 1 dia e horário na grade acima antes de confirmar!');
   }
 
   try {
@@ -1613,18 +1712,18 @@ async function saveSubscriberMonthlyDays() {
       memberId: m.id,
       days: selectedCalendarDays
     });
-    state = res.state;
+    updateState(res);
     renderAll();
-    toast(`📅 Seus ${selectedCalendarDays.length} dias do mês foram reservados na ficha do Rogério!`);
+    toast(`📅 Confirmado! Seus ${selectedCalendarDays.length} horários (${selectedCalendarDays.join(' • ')}) foram salvos na agenda do Rogério!`);
   } catch (e) {
     toast(e.message);
   }
 }
 
 async function orderStoreItem(itemName, basePrice) {
-  const m = state.members.find(x => x.id === currentMemberId);
+  const m = getActiveMember();
   if (!m) {
-    toast('Faça login na sua conta para reservar bebidas/produtos com desconto de assinante!');
+    toast('🔒 Assine um plano ou faça login para reservar bebidas e produtos com desconto VIP!');
     return openLoginModal('login');
   }
   try {
@@ -1633,12 +1732,14 @@ async function orderStoreItem(itemName, basePrice) {
       itemName,
       basePrice
     });
-    state = res.state;
+    updateState(res);
     renderAll();
-    const ord = res.order;
-    toast(ord.discountPct > 0
-      ? `🍺 ${ord.item} reservado por R$ ${ord.finalPrice.toFixed(2)} (${ord.discountPct}% OFF VIP)!`
-      : `🍺 ${ord.item} reservado na sua comanda por R$ ${ord.finalPrice.toFixed(2)}!`);
+    const finalPrice = Number(res.finalPrice ?? res.order?.finalPrice ?? basePrice);
+    const discountPct = Number(res.discountPct ?? res.order?.discountPct ?? 0);
+    const name = res.itemName || res.order?.item || itemName;
+    toast(discountPct > 0
+      ? `🍺 ${name} reservado por R$ ${finalPrice.toFixed(2)} (${discountPct}% OFF VIP)!`
+      : `🍺 ${name} reservado na sua comanda por R$ ${finalPrice.toFixed(2)}!`);
   } catch (e) {
     toast(e.message);
   }
@@ -1646,75 +1747,135 @@ async function orderStoreItem(itemName, basePrice) {
 
 function renderVipArea() {
   const calGrid = document.getElementById('vip-calendar-grid');
+  const timesGrid = document.getElementById('vip-times-grid');
+  const activeDayTitle = document.getElementById('vip-active-day-title');
   const storeGrid = document.getElementById('vip-store-grid');
   if (!calGrid || !storeGrid) return;
 
-  const m = state.members.find(x => x.id === currentMemberId);
+  const availDays = getAvailableMonthDays();
+  if (!activeInspectDay || !availDays.some(d => d.label === activeInspectDay)) {
+    activeInspectDay = availDays[0]?.label || 'Sáb 17/10';
+  }
+
+  const m = getActiveMember();
   const isPaidActive = Boolean(m && (m.status === 'active' || m.status === 'rescheduled'));
   const isGold = Boolean(isPaidActive && m.plan.includes('Gold'));
   const isClub = Boolean(isPaidActive && m.plan.includes('Club'));
   const maxDays = m ? (m.cutsLimit || (m.plan.includes('Gold') ? 4 : 2)) : 4;
   const discountPct = isGold ? 10 : isClub ? 5 : 0;
 
-  const statusPill = document.getElementById('vip-plan-status-pill');
+  const loungeBadge = document.getElementById('vip-lounge-badge');
   const counterEl = document.getElementById('vip-days-counter');
   const summaryEl = document.getElementById('vip-selected-summary');
-  const discBadge = document.getElementById('vip-discount-badge');
+  const discBadge = document.getElementById('vip-discount-pill');
 
-  if (statusPill) {
+  if (loungeBadge) {
     if (isGold) {
-      statusPill.className = 'px-4 py-2 rounded-2xl bg-emerald-500/15 text-emerald-400 text-xs font-bold border border-emerald-500/30';
-      statusPill.textContent = `👑 ${m.name.split(' ')[0]} • Gold VIP Ativo (4 Dias/Mês + 10% OFF no Bar)`;
+      loungeBadge.className = 'text-[10px] sm:text-[11px] font-bold px-3 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30';
+      loungeBadge.textContent = `👑 ${m.name.split(' ')[0]} • Gold VIP Ativo (4 Horários/Mês + 10% OFF no Bar)`;
     } else if (isClub) {
-      statusPill.className = 'px-4 py-2 rounded-2xl bg-emerald-500/15 text-emerald-400 text-xs font-bold border border-emerald-500/30';
-      statusPill.textContent = `✦ ${m.name.split(' ')[0]} • Club Ativo (2 Dias/Mês + 5% OFF no Bar)`;
-    } else if (m && m.status === 'pending_payment') {
-      statusPill.className = 'px-4 py-2 rounded-2xl bg-amber-500/15 text-amber-400 text-xs font-bold border border-amber-500/30';
-      statusPill.textContent = `⏳ ${m.name.split(' ')[0]} • Pagamento Pendente (Ative p/ Liberar Seus ${maxDays} Dias)`;
+      loungeBadge.className = 'text-[10px] sm:text-[11px] font-bold px-3 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30';
+      loungeBadge.textContent = `✦ ${m.name.split(' ')[0]} • Club Ativo (2 Horários/Mês + 5% OFF no Bar)`;
     } else {
-      statusPill.className = 'px-4 py-2 rounded-2xl subtle-ln text-xs font-bold text-[var(--accent)]';
-      statusPill.textContent = '🔒 Faça Login ou Assine o Gold VIP p/ Reservar Seus 4 Dias do Mês';
+      loungeBadge.className = 'text-[10px] sm:text-[11px] font-bold px-3 py-0.5 rounded-full subtle-ln text-[var(--accent)]';
+      loungeBadge.textContent = '🔒 Exclusivo Assinantes Club & Gold VIP';
     }
   }
 
   if (counterEl) {
-    counterEl.textContent = `${selectedCalendarDays.length}/${maxDays} Dias`;
+    counterEl.textContent = `${selectedCalendarDays.length}/${maxDays} Horários`;
   }
 
   if (summaryEl) {
-    summaryEl.textContent = selectedCalendarDays.length > 0
-      ? `✅ Seus dias escolhidos no mês: ${selectedCalendarDays.join('  •  ')}`
-      : isPaidActive
-      ? `Toque em até ${maxDays} datas livres acima para deixar seus cortes do mês pré-agendados.`
-      : 'Assinantes Gold VIP escolhem seus 4 dias livres no mês e garantem prioridade na cadeira.';
+    if (selectedCalendarDays.length > 0) {
+      summaryEl.innerHTML = `
+        <div class="text-[11px] font-bold text-emerald-400 mb-1">✅ Seus horários escolhidos no mês:</div>
+        <div class="flex flex-wrap gap-1.5">
+          ${selectedCalendarDays.map(slot => `
+            <span class="px-2.5 py-1 rounded-xl card-ln border border-[#d96b43]/50 text-[11px] font-bold flex items-center gap-1.5">
+              <span>📅 ${slot}</span>
+              <button onclick="removeScheduledSlot('${slot}')" class="text-rose-400 hover:text-rose-300 font-extrabold" title="Remover horário">✕</button>
+            </span>
+          `).join('')}
+        </div>
+      `;
+    } else {
+      summaryEl.textContent = isPaidActive
+        ? `Selecione um dia acima e toque no horário desejado (até ${maxDays} cortes no mês).`
+        : 'Assinantes Gold VIP escolhem seus 4 dias e horários livres no mês com prioridade na cadeira.';
+    }
   }
 
   if (discBadge) {
     discBadge.textContent = isGold
-      ? '👑 10% OFF ATIVO (GOLD)'
+      ? '👑 SEU DESCONTO GOLD: 10% OFF ATIVO'
       : isClub
-      ? '✦ 5% OFF ATIVO (CLUB)'
-      : '5% A 10% OFF P/ ASSINANTES';
+      ? '✦ SEU DESCONTO CLUB: 5% OFF ATIVO'
+      : '👑 Gold VIP: 10% OFF • Club: 5% OFF';
   }
 
-  const availDays = getAvailableMonthDays();
+  // 1. Renderiza os Dias do Mês (destacando o dia aberto para inspeção e quantos horários o cliente tem naquele dia)
   calGrid.innerHTML = availDays.map(d => {
-    const isSelected = selectedCalendarDays.includes(d.label);
+    const isInspecting = d.label === activeInspectDay;
+    const mySlotsOnDay = selectedCalendarDays
+      .filter(s => s.startsWith(d.label))
+      .map(s => s.split(' às ')[1] || '✓');
+    const hasMyBooking = mySlotsOnDay.length > 0;
+
     return `
-      <button onclick="toggleCalendarDay('${d.label}')" class="p-2.5 rounded-2xl text-center transition border ${
-        isSelected
-          ? 'btn-ln-primary border-[#d96b43] shadow-lg scale-[1.02]'
+      <button onclick="selectInspectDay('${d.label}')" class="p-2 rounded-2xl text-center transition border ${
+        hasMyBooking
+          ? 'btn-ln-primary border-[#d96b43] shadow-lg'
+          : isInspecting
+          ? 'card-ln border-2 border-[#d96b43] scale-[1.02]'
           : 'subtle-ln border-transparent hover:border-[#d96b43]/50'
       }">
-        <div class="text-[10px] font-mono-ln uppercase opacity-75">${d.week}</div>
-        <div class="text-sm font-extrabold mt-0.5">${d.dateNum}</div>
-        <div class="text-[9px] font-bold mt-0.5 ${isSelected ? 'text-white' : 'text-emerald-400'}">
-          ${isSelected ? '✓ Seu Dia' : 'Livre'}
+        <div class="text-[9px] font-mono-ln uppercase opacity-75">${d.week}</div>
+        <div class="text-xs sm:text-sm font-extrabold mt-0.5">${d.dateNum}</div>
+        <div class="text-[9px] font-bold mt-0.5 truncate ${hasMyBooking ? 'text-white' : isInspecting ? 'text-[var(--accent)]' : 'text-emerald-400'}">
+          ${hasMyBooking ? `✓ ${mySlotsOnDay.join(', ')}` : isInspecting ? 'Ver Horas' : 'Livre'}
         </div>
       </button>
     `;
   }).join('');
 
+  // 2. Renderiza os Horários do Dia Selecionado (ex: 08:30, 09:30, 10:15, 11:00 | Almoço | 13:30..19:30)
+  if (activeDayTitle) {
+    activeDayTitle.textContent = `⏰ 2. Escolha o Horário em ${activeInspectDay}:`;
+  }
+  if (timesGrid) {
+    timesGrid.innerHTML = DAILY_TIME_SLOTS.map(slotObj => {
+      const fullSlot = `${activeInspectDay} às ${slotObj.time}`;
+      const isMine = selectedCalendarDays.includes(fullSlot);
+      const isTakenByOther = (state?.bookedSlots || []).some(
+        b => b.slot === fullSlot && b.memberId !== currentMemberId
+      );
+
+      if (isTakenByOther) {
+        return `
+          <button disabled class="p-2 rounded-xl text-center subtle-ln opacity-40 cursor-not-allowed border border-transparent">
+            <div class="text-xs font-mono-ln font-bold line-through">${slotObj.time}</div>
+            <div class="text-[9px] text-rose-400 font-bold">🔒 Ocupado</div>
+          </button>
+        `;
+      }
+
+      return `
+        <button onclick="toggleDayTimeSlot('${activeInspectDay}', '${slotObj.time}')" class="p-2 rounded-xl text-center transition border ${
+          isMine
+            ? 'btn-ln-primary border-[#d96b43] shadow-md scale-[1.02]'
+            : 'subtle-ln border-transparent hover:border-emerald-500/50'
+        }">
+          <div class="text-xs font-mono-ln font-extrabold">${slotObj.time}</div>
+          <div class="text-[9px] font-bold ${isMine ? 'text-white' : 'text-emerald-400'}">
+            ${isMine ? '✓ Reservado' : `🟢 ${slotObj.period}`}
+          </div>
+        </button>
+      `;
+    }).join('');
+  }
+
+  // 3. Renderiza a Geladeira (Bebidas) & Produtos Físicos com Desconto de Assinante
   storeGrid.innerHTML = BAR_STORE_PRODUCTS.map(item => {
     const goldPrice = +(item.basePrice * 0.90).toFixed(2);
     const clubPrice = +(item.basePrice * 0.95).toFixed(2);

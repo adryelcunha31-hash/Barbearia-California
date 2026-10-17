@@ -132,10 +132,10 @@
         <button onclick="closeLoginModal()" class="w-8 h-8 rounded-full subtle-ln font-bold text-xs">✕</button>
       </div>
 
-      <!-- Abas Entrar vs Criar Conta -->
+      <!-- Abas Entrar vs Assinar Plano -->
       <div class="grid grid-cols-2 gap-1.5 p-1 rounded-2xl subtle-ln text-xs font-bold">
-        <button id="tab-btn-login" onclick="switchAuthTab('login')" class="py-2 rounded-xl btn-ln-primary transition">Já Sou Cliente</button>
-        <button id="tab-btn-register" onclick="switchAuthTab('register')" class="py-2 rounded-xl opacity-75 hover:opacity-100 transition">Criar Minha Conta</button>
+        <button id="tab-btn-login" onclick="switchAuthTab('login')" class="py-2 rounded-xl btn-ln-primary transition">Já Sou Assinante</button>
+        <button id="tab-btn-register" onclick="switchAuthTab('register')" class="py-2 rounded-xl opacity-75 hover:opacity-100 transition">Assinar Plano (Novo)</button>
       </div>
 
       <!-- Formulário de Login -->
@@ -149,12 +149,15 @@
           <input id="login-pin" type="password" maxlength="6" value="" placeholder="••••" class="w-full subtle-ln rounded-xl px-3.5 py-2.5 text-sm font-mono-ln focus:outline-none" />
         </div>
         <button onclick="submitClientLogin()" class="w-full btn-ln-primary py-3 rounded-xl text-xs sm:text-sm font-bold">
-          Entrar na Minha Conta
+          Entrar no Painel de Assinante
         </button>
       </div>
 
-      <!-- Formulário de Novo Cadastro (Integrado ao Asaas) -->
+      <!-- Formulário de Assinatura (Exige Pagamento p/ Ativar Conta) -->
       <div id="auth-form-register" class="hidden space-y-2.5">
+        <div class="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-300 leading-snug">
+          🔒 <strong>Conta exclusiva para assinantes:</strong> Sua conta só é liberada após a confirmação do pagamento (PIX ou Cartão) na etapa seguinte.
+        </div>
         <div>
           <label class="text-xs font-bold opacity-80 block mb-1">Nome Completo</label>
           <input id="reg-name" type="text" placeholder="Ex: João Pedro Silva" class="w-full subtle-ln rounded-xl px-3.5 py-2 text-sm focus:outline-none" />
@@ -175,7 +178,7 @@
             <input id="reg-pin" type="password" maxlength="4" placeholder="1234" class="w-full subtle-ln rounded-xl px-3 py-2 text-xs font-mono-ln focus:outline-none" />
           </div>
           <div>
-            <label class="text-xs font-bold opacity-80 block mb-1">Plano Inicial</label>
+            <label class="text-xs font-bold opacity-80 block mb-1">Escolha Seu Plano</label>
             <select id="reg-plan" class="w-full subtle-ln rounded-xl px-2.5 py-2 text-xs font-bold focus:outline-none bg-transparent">
               <option value="gold" class="bg-zinc-900 text-white">👑 Gold VIP 4x (R$ 109,90)</option>
               <option value="club" class="bg-zinc-900 text-white">✂ Club 2x (R$ 69,90)</option>
@@ -183,7 +186,7 @@
           </div>
         </div>
         <button onclick="submitClientRegister()" class="w-full btn-ln-primary py-3 rounded-xl text-xs sm:text-sm font-bold">
-          Criar Conta & Ir para Pagamento →
+          Ir para Pagamento do Plano →
         </button>
       </div>
 
@@ -584,30 +587,41 @@
         </div>
 
         <div class="grid lg:grid-cols-12 gap-6 items-start">
-          <!-- COLUNA ESQUERDA (6 COLUNAS): ESCOLHA DOS SEUS DIAS LIVRES NO MÊS (4 DIAS NO GOLD VIP / 2 DIAS NO CLUB) -->
+          <!-- COLUNA ESQUERDA (6 COLUNAS): ESCOLHA DOS SEUS DIAS + HORÁRIOS LIVRES NO MÊS (4 NO GOLD VIP / 2 NO CLUB) -->
           <div class="lg:col-span-6 subtle-ln rounded-3xl p-4 sm:p-6 space-y-4">
             <div class="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <span class="text-[10px] font-mono-ln font-bold uppercase tracking-wider text-emerald-400 block">Agenda Mensal Garantida</span>
-                <h3 class="font-extrabold text-base sm:text-xl">📅 Escolha Seus Dias Livres no Mês</h3>
+                <span class="text-[10px] font-mono-ln font-bold uppercase tracking-wider text-emerald-400 block">Agenda Mensal por Dia & Horário</span>
+                <h3 class="font-extrabold text-base sm:text-xl">📅 1. Escolha o Dia e o Horário Livre</h3>
               </div>
               <span id="vip-days-counter" class="px-3 py-1 rounded-full card-ln font-mono-ln text-xs font-bold text-[var(--accent)]">
-                0 de 4 dias reservados
+                0/4 Horários
               </span>
             </div>
 
             <p class="text-xs opacity-80 leading-relaxed">
-              No plano <strong>Califórnia Gold VIP</strong> você tem <strong>4 dias garantidos no mês</strong> (ou 2 dias no Club). Clique nos dias disponíveis abaixo para deixar suas datas já reservadas na cadeira:
+              No plano <strong>Califórnia Gold VIP</strong> você tem <strong>4 cortes garantidos no mês</strong> (ou 2 no Club). Toque primeiro no <strong>dia</strong> abaixo e em seguida escolha o <strong>horário disponível</strong> (ex: 09:30, 11:00, 14:30):
             </p>
 
-            <div id="vip-calendar-grid" class="grid grid-cols-2 sm:grid-cols-4 gap-2"></div>
+            <div id="vip-calendar-grid" class="grid grid-cols-3 sm:grid-cols-6 gap-2"></div>
+
+            <!-- GRADE DE HORÁRIOS DO DIA SELECIONADO (COM PARADA DE ALMOÇO) -->
+            <div id="vip-times-box" class="card-ln rounded-2xl p-3.5 sm:p-4 space-y-3 border border-[#d96b43]/40">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <span id="vip-active-day-title" class="text-xs font-extrabold text-[var(--accent)]">
+                  ⏰ 2. Horários Disponíveis em Sáb 17/10:
+                </span>
+                <span class="text-[10px] font-mono-ln opacity-70">🍽️ Almoço: 12:00 às 13:30</span>
+              </div>
+              <div id="vip-times-grid" class="grid grid-cols-3 sm:grid-cols-4 gap-2"></div>
+            </div>
 
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-[var(--border)]">
-              <div class="text-[11px] opacity-75 font-mono-ln" id="vip-selected-summary">
-                Nenhum dia selecionado ainda.
+              <div class="text-[11px] opacity-85 font-mono-ln space-y-1" id="vip-selected-summary">
+                Nenhum dia e horário selecionado ainda.
               </div>
               <button onclick="saveSubscriberMonthlyDays()" class="btn-ln-primary px-5 py-3 rounded-2xl text-xs font-bold shrink-0">
-                💾 Confirmar Meus Dias no Mês
+                💾 Confirmar Dias & Horários
               </button>
             </div>
           </div>

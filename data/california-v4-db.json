@@ -8,33 +8,7 @@
     "rescheduleFee": 5,
     "extraRevenue": 0
   },
-  "members": [
-    {
-      "id": "m1792234104138",
-      "name": "Adryel Cunha",
-      "cpf": "07664068142",
-      "phone": "5565992152625",
-      "pin": "1504",
-      "plan": "Califórnia Gold (4 Cortes/mês)",
-      "price": 109.9,
-      "cutsUsed": 0,
-      "cutsLimit": 4,
-      "status": "active",
-      "daysOverdue": 0,
-      "feeAdded": 0,
-      "dueDate": "16/11/2026",
-      "avatar": "AC",
-      "scheduledDays": [],
-      "storeOrders": [],
-      "visagism": {
-        "shape": "Quadrado",
-        "cut": "Mid Fade + Crop Texturizado",
-        "angles": "118° Maxilar",
-        "notes": "Diagnóstico salvo no cadastro."
-      },
-      "asaasCustomerId": "cus_000207356848"
-    }
-  ],
+  "members": [],
   "queue": [],
   "transactions": []
 }
