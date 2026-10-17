@@ -219,31 +219,23 @@
         <button id="pay-tab-card" onclick="switchPaymentMethod('CREDIT_CARD')" class="py-2.5 rounded-xl opacity-75 hover:opacity-100 transition">💳 Cartão Recorrente</button>
       </div>
 
-      <!-- ABA 1: PIX AUTOMÁTICO / QR CODE DINÂMICO ASAAS -->
+      <!-- ABA 1: PIX AUTOMÁTICO / QR CODE DINÂMICO REAL DO ASAAS -->
       <div id="pay-panel-pix" class="subtle-ln rounded-2xl p-4 text-center space-y-3">
         <div class="flex items-center justify-between text-[11px] px-1">
-          <span class="font-bold text-emerald-500">✔ PIX Automático Banco Central / Asaas</span>
-          <span class="opacity-70 font-mono-ln">Baixa Automática</span>
+          <span class="font-bold text-emerald-500">✔ QR Code PIX Oficial (Banco Central / Asaas)</span>
+          <span id="pix-status-tag" class="opacity-70 font-mono-ln">Tempo Real</span>
         </div>
-        <div class="w-32 h-32 mx-auto bg-white p-2.5 rounded-2xl flex items-center justify-center">
-          <svg viewBox="0 0 100 100" class="w-full h-full text-black" fill="currentColor">
-            <rect x="8" y="8" width="26" height="26" fill="none" stroke="currentColor" stroke-width="6"/>
-            <rect x="15" y="15" width="12" height="12"/>
-            <rect x="66" y="8" width="26" height="26" fill="none" stroke="currentColor" stroke-width="6"/>
-            <rect x="73" y="15" width="12" height="12"/>
-            <rect x="8" y="66" width="26" height="26" fill="none" stroke="currentColor" stroke-width="6"/>
-            <rect x="15" y="73" width="12" height="12"/>
-            <rect x="42" y="12" width="8" height="8"/><rect x="42" y="28" width="8" height="16"/>
-            <rect x="14" y="44" width="18" height="8"/><rect x="42" y="48" width="16" height="16"/>
-            <rect x="66" y="44" width="10" height="18"/><rect x="82" y="52" width="10" height="14"/>
-            <rect x="44" y="72" width="14" height="8"/><rect x="66" y="72" width="24" height="10"/>
-          </svg>
+        <div class="w-40 h-40 mx-auto bg-white p-2 rounded-2xl flex items-center justify-center relative overflow-hidden">
+          <div id="pix-qr-loading" class="text-[11px] font-mono-ln text-zinc-800 font-bold px-2 text-center">
+            Gerando QR Code PIX no Asaas...
+          </div>
+          <img id="pix-qr-img" src="" alt="QR Code PIX Asaas" class="w-full h-full object-contain hidden" />
         </div>
         <p class="text-[11px] opacity-80 leading-relaxed">
-          Ao pagar o 1º PIX, o <strong>Asaas ativa sua assinatura mensal</strong> e envia o lembrete automático no WhatsApp todo mês com baixa instantânea.
+          Escaneie o QR Code acima no app do seu banco ou copie o código abaixo. Assim que pagar, clique no botão para <strong>confirmar a compensação no Asaas</strong>.
         </p>
         <div class="flex gap-2">
-          <input id="pix-payload-input" readonly value="00020126580014BR.GOV.BCB.PIX0114ASAASCALIFORNI520400005303986" class="flex-1 bg-black/20 rounded-xl px-3 py-2 text-[11px] font-mono-ln truncate" />
+          <input id="pix-payload-input" readonly value="Gerando código PIX Copia e Cola..." class="flex-1 bg-black/20 rounded-xl px-3 py-2 text-[11px] font-mono-ln truncate" />
           <button onclick="navigator.clipboard?.writeText(document.getElementById('pix-payload-input').value); toast('Código PIX Copia e Cola copiado!')" class="btn-ln-ghost px-3 py-2 rounded-xl text-xs font-bold shrink-0">Copiar</button>
         </div>
       </div>
@@ -251,16 +243,16 @@
       <!-- ABA 2: CARTÃO DE CRÉDITO RECORRENTE (NÃO OCUPA LIMITE ANUAL) -->
       <div id="pay-panel-card" class="hidden subtle-ln rounded-2xl p-4 space-y-2.5">
         <div class="flex items-center justify-between text-[11px]">
-          <span class="font-bold text-[var(--accent)]">✔ Cobrança Mensal (Não trava o limite)</span>
-          <span class="opacity-70 font-mono-ln">Tokenização Asaas</span>
+          <span class="font-bold text-[var(--accent)]">✔ Validação Bancária Luhn & Operadora Asaas</span>
+          <span class="opacity-70 font-mono-ln">Tokenização Segura</span>
         </div>
         <div>
-          <label class="text-[11px] font-bold opacity-75 block mb-1">Número do Cartão de Crédito</label>
+          <label class="text-[11px] font-bold opacity-75 block mb-1">Número do Cartão de Crédito (16 dígitos)</label>
           <input id="cc-number" type="text" maxlength="19" placeholder="0000 0000 0000 0000" class="w-full card-ln rounded-xl px-3 py-2 text-xs font-mono-ln focus:outline-none" />
         </div>
         <div>
-          <label class="text-[11px] font-bold opacity-75 block mb-1">Nome Impresso no Cartão</label>
-          <input id="cc-holder" type="text" placeholder="NOME COMO NO CARTÃO" class="w-full card-ln rounded-xl px-3 py-2 text-xs uppercase focus:outline-none" />
+          <label class="text-[11px] font-bold opacity-75 block mb-1">Nome e Sobrenome (Como no Cartão)</label>
+          <input id="cc-holder" type="text" placeholder="NOME E SOBRENOME" class="w-full card-ln rounded-xl px-3 py-2 text-xs uppercase focus:outline-none" />
         </div>
         <div class="grid grid-cols-3 gap-2">
           <div>
@@ -279,7 +271,7 @@
       </div>
 
       <button onclick="confirmCheckoutPayment()" id="btn-confirm-checkout" class="w-full btn-ln-primary py-3.5 rounded-2xl text-xs sm:text-sm font-bold">
-        Confirmar Assinatura Agora
+        🔄 Já Paguei o PIX • Verificar no Asaas
       </button>
     </div>
   </div>
@@ -298,11 +290,12 @@
 
       <!-- Center Floating Nav Pill -->
       <nav class="hidden lg:flex pointer-events-auto btn-ln-ghost p-1.5 rounded-2xl items-center gap-1 text-xs sm:text-sm font-bold whitespace-nowrap">
-        <a href="#top" class="px-4 py-1.5 rounded-xl hover:opacity-70 transition">Início</a>
-        <a href="#fila-section" class="px-4 py-1.5 rounded-xl hover:opacity-70 transition">Fila Ao Vivo</a>
-        <a href="#visagismo-section" class="px-4 py-1.5 rounded-xl hover:opacity-70 transition">Visagismo 3D</a>
-        <a href="#clube-section" class="px-4 py-1.5 rounded-xl hover:opacity-70 transition">Clube Anual</a>
-        <a href="#avaliacoes-section" class="px-4 py-1.5 rounded-xl hover:opacity-70 transition">Avaliações</a>
+        <a href="#top" class="px-3.5 py-1.5 rounded-xl hover:opacity-70 transition">Início</a>
+        <a href="#fila-section" class="px-3.5 py-1.5 rounded-xl hover:opacity-70 transition">Fila Ao Vivo</a>
+        <a href="#visagismo-section" class="px-3.5 py-1.5 rounded-xl hover:opacity-70 transition">Visagismo 3D</a>
+        <a href="#vip-area-section" class="px-3.5 py-1.5 rounded-xl text-[var(--accent)] hover:opacity-80 transition">👑 Área VIP & Bar</a>
+        <a href="#clube-section" class="px-3.5 py-1.5 rounded-xl hover:opacity-70 transition">Planos</a>
+        <a href="#avaliacoes-section" class="px-3.5 py-1.5 rounded-xl hover:opacity-70 transition">Avaliações</a>
       </nav>
 
       <!-- Right Action Pills -->
@@ -312,8 +305,8 @@
           <span id="theme-label" class="hidden sm:inline">Claro</span>
         </button>
 
-        <button onclick="openLoginModal()" class="btn-ln-primary px-3 sm:px-4 py-2 sm:py-2.5 rounded-2xl text-[11px] sm:text-xs font-bold flex items-center gap-1.5 shadow-md">
-          <span>👤</span>
+        <button onclick="handleAccountButtonClick()" class="btn-ln-primary px-3 sm:px-4 py-2 sm:py-2.5 rounded-2xl text-[11px] sm:text-xs font-bold flex items-center gap-1.5 shadow-md">
+          <span>👑</span>
           <span id="nav-user-name" class="truncate max-w-[96px] sm:max-w-none">Minha Conta</span>
         </button>
       </div>
@@ -569,11 +562,83 @@
       </div>
     </section>
 
+    <!-- ================= 3.5 ÁREA EXCLUSIVA DO ASSINANTE: MEUS DIAS DO MÊS + BAR & PRODUTOS VIP ================= -->
+    <section id="vip-area-section" class="space-y-5 sm:space-y-6 scroll-mt-24">
+      <div class="card-ln rounded-3xl p-4 sm:p-8 space-y-6 border-2 border-[#d96b43]/50">
+        <div class="flex flex-wrap items-center justify-between gap-3 pb-4 sm:pb-5 border-b border-[var(--border)]">
+          <div class="min-w-0">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="text-[11px] sm:text-xs font-mono-ln font-bold uppercase tracking-widest text-[var(--accent)]">03 / Painel Exclusivo do Assinante</span>
+              <span id="vip-lounge-badge" class="text-[10px] sm:text-[11px] font-bold px-3 py-0.5 rounded-full subtle-ln text-[var(--accent)]">🔒 Exclusivo Club & Gold VIP</span>
+            </div>
+            <h2 class="font-display-ln text-lg sm:text-4xl font-extrabold uppercase mt-1 leading-tight">Meus Dias do Mês & Bar VIP</h2>
+            <p id="vip-lounge-welcome" class="text-xs sm:text-sm opacity-75 mt-1">
+              Reserve seus 4 dias de corte do mês na agenda da barbearia e aproveite descontos exclusivos em bebidas geladas e produtos físicos.
+            </p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <button onclick="openLoginModal()" class="btn-ln-ghost px-4 py-2.5 rounded-2xl text-xs font-bold">
+              🔄 Trocar Conta / Sair
+            </button>
+          </div>
+        </div>
+
+        <div class="grid lg:grid-cols-12 gap-6 items-start">
+          <!-- COLUNA ESQUERDA (6 COLUNAS): ESCOLHA DOS SEUS DIAS LIVRES NO MÊS (4 DIAS NO GOLD VIP / 2 DIAS NO CLUB) -->
+          <div class="lg:col-span-6 subtle-ln rounded-3xl p-4 sm:p-6 space-y-4">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <span class="text-[10px] font-mono-ln font-bold uppercase tracking-wider text-emerald-400 block">Agenda Mensal Garantida</span>
+                <h3 class="font-extrabold text-base sm:text-xl">📅 Escolha Seus Dias Livres no Mês</h3>
+              </div>
+              <span id="vip-days-counter" class="px-3 py-1 rounded-full card-ln font-mono-ln text-xs font-bold text-[var(--accent)]">
+                0 de 4 dias reservados
+              </span>
+            </div>
+
+            <p class="text-xs opacity-80 leading-relaxed">
+              No plano <strong>Califórnia Gold VIP</strong> você tem <strong>4 dias garantidos no mês</strong> (ou 2 dias no Club). Clique nos dias disponíveis abaixo para deixar suas datas já reservadas na cadeira:
+            </p>
+
+            <div id="vip-calendar-grid" class="grid grid-cols-2 sm:grid-cols-4 gap-2"></div>
+
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-[var(--border)]">
+              <div class="text-[11px] opacity-75 font-mono-ln" id="vip-selected-summary">
+                Nenhum dia selecionado ainda.
+              </div>
+              <button onclick="saveSubscriberMonthlyDays()" class="btn-ln-primary px-5 py-3 rounded-2xl text-xs font-bold shrink-0">
+                💾 Confirmar Meus Dias no Mês
+              </button>
+            </div>
+          </div>
+
+          <!-- COLUNA DIREITA (6 COLUNAS): BAR CALIFÓRNIA (BEBIDAS GELADAS) & PRODUTOS FÍSICOS COM DESCONTO VIP -->
+          <div class="lg:col-span-6 subtle-ln rounded-3xl p-4 sm:p-6 space-y-4">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <span class="text-[10px] font-mono-ln font-bold uppercase tracking-wider text-[var(--accent)] block">Geladeira & Prateleira da Barbearia</span>
+                <h3 class="font-extrabold text-base sm:text-xl">🍺 Bebidas & Produtos Físicos</h3>
+              </div>
+              <span id="vip-discount-pill" class="px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-400 font-mono-ln text-xs font-bold">
+                👑 Gold VIP: 10% OFF • Club: 5% OFF
+              </span>
+            </div>
+
+            <p class="text-xs opacity-80 leading-relaxed">
+              Assinantes têm desconto automático em todas as <strong>bebidas trincando da geladeira</strong> e produtos para barba/cabelo. Deixe reservado para o seu corte:
+            </p>
+
+            <div id="vip-store-grid" class="grid sm:grid-cols-2 gap-2.5"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- ================= 4. CLUBE ANUAL DE ASSINATURA ================= -->
     <section id="clube-section" class="space-y-5 sm:space-y-6 scroll-mt-24">
       <div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div class="min-w-0">
-          <span class="text-[11px] sm:text-xs font-mono-ln font-bold uppercase tracking-widest text-[var(--accent)]">03 / Fidelidade 12 Meses • Pagamento Mensal</span>
+          <span class="text-[11px] sm:text-xs font-mono-ln font-bold uppercase tracking-widest text-[var(--accent)]">04 / Fidelidade 12 Meses • Pagamento Mensal</span>
           <h2 class="font-display-ln text-xl sm:text-4xl font-extrabold uppercase mt-1 leading-tight">Clube de Assinatura Califórnia</h2>
         </div>
 
@@ -596,7 +661,7 @@
     <section id="avaliacoes-section" class="space-y-5 sm:space-y-6 scroll-mt-24 pb-8">
       <div class="flex flex-wrap items-center justify-between gap-4">
         <div class="min-w-0">
-          <span class="text-[11px] sm:text-xs font-mono-ln font-bold uppercase tracking-widest text-[var(--accent)]">04 / Reputação 5.0 Estrelas em São José do Rio Claro</span>
+          <span class="text-[11px] sm:text-xs font-mono-ln font-bold uppercase tracking-widest text-[var(--accent)]">05 / Reputação 5.0 Estrelas em São José do Rio Claro</span>
           <h2 class="font-display-ln text-xl sm:text-4xl font-extrabold uppercase mt-1 leading-tight">Avaliações Verificadas</h2>
         </div>
         <a href="https://www.google.com.br/maps/place/BARBEARIA+CALIFORNIA/@-13.4463024,-56.7259668,17z" target="_blank" class="btn-ln-ghost px-4 py-2.5 rounded-xl text-xs font-bold">
@@ -614,7 +679,8 @@
     <a href="#top" class="flex flex-col items-center gap-0.5 py-1 text-[var(--accent)]"><span>🎬</span><span>Início</span></a>
     <a href="#fila-section" class="flex flex-col items-center gap-0.5 py-1 opacity-80"><span>✂</span><span>Fila</span></a>
     <a href="#visagismo-section" class="flex flex-col items-center gap-0.5 py-1 opacity-80"><span>🧠</span><span>Visagismo</span></a>
-    <button onclick="openLoginModal()" class="flex flex-col items-center gap-0.5 py-1 opacity-80"><span>👤</span><span>Conta</span></button>
+    <a href="#vip-area-section" class="flex flex-col items-center gap-0.5 py-1 text-[var(--accent)]"><span>👑</span><span>Área VIP</span></a>
+    <button onclick="handleAccountButtonClick()" class="flex flex-col items-center gap-0.5 py-1 opacity-80"><span>👤</span><span>Conta</span></button>
   </nav>
 
   <script src="/app.js"></script>

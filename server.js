@@ -23,7 +23,6 @@ const ADMIN_USER = process.env.ADMIN_USER || 'Rogério';
 const ADMIN_PIN = process.env.ADMIN_PIN || 'Rogério2026';
 const DB_FILE = path.join(__dirname, 'data', 'california-v4-db.json');
 
-// Rate limiter em memória contra força bruta
 const loginAttempts = new Map();
 const activeSessions = new Set();
 
@@ -57,6 +56,69 @@ function saveDb(data) {
 const clean = (s) => String(s || '').replace(/[<>]/g, '').trim().slice(0, 140);
 const nowTime = () => new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 const stripAccents = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+// Validador Oficial de CPF (Algoritmo Módulo 11 da Receita Federal)
+function isValidCpf(cpfRaw) {
+  const cpf = String(cpfRaw || '').replace(/\D/g, '');
+  if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false;
+  let sum = 0;
+  for (let i = 0; i < 9; i++) sum += parseInt(cpf[i], 10) * (10 - i);
+  let d1 = (sum * 10) % 11;
+  if (d1 === 10) d1 = 0;
+  if (d1 !== parseInt(cpf[9], 10)) return false;
+  sum = 0;
+  for (let i = 0; i < 10; i++) sum += parseInt(cpf[i], 10) * (11 - i);
+  let d2 = (sum * 10) % 11;
+  if (d2 === 10) d2 = 0;
+  return d2 === parseInt(cpf[10], 10);
+}
+
+// Validador Oficial de Cartão de Crédito (Algoritmo Bancário de Luhn + Validade + CVV)
+function validateCreditCard(cc) {
+  if (!cc) return 'Informe os dados do cartão de crédito.';
+  const num = String(cc.number || '').replace(/\D/g, '');
+  if (num.length < 13 || num.length > 19 || /^(\d)\1+$/.test(num)) {
+    return 'Número de cartão inválido. Verifique os 16 dígitos.';
+  }
+  let sum = 0;
+  let shouldDouble = false;
+  for (let i = num.length - 1; i >= 0; i--) {
+    let digit = parseInt(num.charAt(i), 10);
+    if (shouldDouble) {
+      digit *= 2;
+      if (digit > 9) digit -= 9;
+    }
+    sum += digit;
+    shouldDouble = !shouldDouble;
+  }
+  if (sum % 10 !== 0) {
+    return 'Número de cartão inválido (Recusado na verificação bancária Luhn).';
+  }
+
+  const holder = String(cc.holderName || '').trim();
+  if (holder.length < 5 || !holder.includes(' ')) {
+    return 'Informe o nome e sobrenome exatamente como impresso no cartão.';
+  }
+
+  const expParts = String(cc.expiry || '').split('/');
+  if (expParts.length !== 2) return 'Informe a validade do cartão no formato MM/AA.';
+  const expMonth = parseInt(expParts[0], 10);
+  let expYear = parseInt(expParts[1], 10);
+  if (expYear < 100) expYear += 2000;
+  if (!expMonth || expMonth < 1 || expMonth > 12 || !expYear || expYear < 2026 || expYear > 2045) {
+    return 'Data de validade do cartão expirada ou inválida.';
+  }
+
+  const cvv = String(cc.cvv || '').replace(/\D/g, '');
+  if (cvv.length < 3 || cvv.length > 4) {
+    return 'Código de segurança (CVV) inválido.';
+  }
+
+  if (!isValidCpf(cc.cpf)) {
+    return 'CPF do titular do cartão inválido.';
+  }
+  return null;
+}
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -96,6 +158,26 @@ function isAdminRequest(req) {
   return activeSessions.has(token);
 }
 
+async function ensureAsaasCustomer(m, asaasHeaders) {
+  if (m.asaasCustomerId) return { id: m.asaasCustomerId };
+  const custRes = await fetch(`${ASAAS_BASE_URL}/customers`, {
+    method: 'POST',
+    headers: asaasHeaders,
+    body: JSON.stringify({
+      name: m.name,
+      cpfCnpj: m.cpf,
+      mobilePhone: String(m.phone || '').replace(/^55/, ''),
+      externalReference: m.id
+    })
+  });
+  const custData = await custRes.json();
+  if (!custRes.ok || (custData.errors && custData.errors.length > 0)) {
+    return { error: custData.errors?.[0]?.description || 'Erro ao validar CPF/Cliente no Asaas.' };
+  }
+  m.asaasCustomerId = custData.id;
+  return { id: custData.id };
+}
+
 // Blindagem Anti-Vazamento de Dados (LGPD): Remove CPFs, PINs, Telefones e Livro Caixa da rota pública
 function sanitizeDbForRole(db, req) {
   if (isAdminRequest(req)) return db;
@@ -118,7 +200,9 @@ function sanitizeDbForRole(db, req) {
       feeAdded: m.feeAdded,
       dueDate: m.dueDate,
       avatar: m.avatar,
-      visagism: m.visagism
+      visagism: m.visagism,
+      scheduledDays: m.scheduledDays || [],
+      storeOrders: m.storeOrders || []
     })),
     queue: db.queue,
     transactions: []
@@ -157,7 +241,7 @@ const server = http.createServer((req, res) => {
 
       const ip = req.socket.remoteAddress || 'local';
 
-      // Login do Admin com Rate Limiting + Comparação Timing-Safe (Senha: Rogério2026)
+      // Login do Admin (Senha: Rogério2026)
       if (req.method === 'POST' && urlPath === '/api/admin/login') {
         const attempts = loginAttempts.get(ip) || 0;
         if (attempts >= 8) return send(429, { error: 'Muitas tentativas. Aguarde 1 minuto por segurança.' });
@@ -173,7 +257,6 @@ const server = http.createServer((req, res) => {
         return send(401, { error: 'Senha administrativa incorreta.' });
       }
 
-      // Reset / Limpeza Geral do Banco (Exclusivo Admin Autenticado)
       if (req.method === 'POST' && urlPath === '/api/admin/reset') {
         if (!isAdminRequest(req)) return send(403, { error: 'Não autorizado.' });
         const fresh = JSON.parse(JSON.stringify(INITIAL_DB));
@@ -181,7 +264,6 @@ const server = http.createServer((req, res) => {
         return send(200, fresh);
       }
 
-      // Excluir Cliente Individual (Exclusivo Admin Autenticado)
       if (req.method === 'POST' && urlPath === '/api/admin/delete-member') {
         if (!isAdminRequest(req)) return send(403, { error: 'Não autorizado.' });
         db.members = db.members.filter(m => m.id !== payload.memberId);
@@ -190,7 +272,7 @@ const server = http.createServer((req, res) => {
         return send(200, db);
       }
 
-      // Login do Cliente (WhatsApp + PIN de 4 dígitos + Rate Limiting)
+      // Login do Cliente
       if (req.method === 'POST' && urlPath === '/api/client/login') {
         const attempts = loginAttempts.get('cli_' + ip) || 0;
         if (attempts >= 10) return send(429, { error: 'Muitas tentativas. Aguarde 1 minuto.' });
@@ -213,7 +295,7 @@ const server = http.createServer((req, res) => {
         return send(200, { ok: true, token, memberId: member.id, name: member.name });
       }
 
-      // Cadastro de Novo Assinante (Com CPF exigido pelo Asaas)
+      // Cadastro de Novo Cliente (Inicia como 'pending_payment' até confirmar PIX ou Cartão no Asaas!)
       if (req.method === 'POST' && urlPath === '/api/client/register') {
         const name = clean(payload.name);
         const cpf = String(payload.cpf || '').replace(/\D/g, '');
@@ -221,9 +303,22 @@ const server = http.createServer((req, res) => {
         const pin = String(payload.pin || '1234').trim().slice(0, 6);
         const isGold = payload.planKey === 'gold';
 
-        if (name.length < 3) return send(400, { error: 'Informe seu nome completo.' });
-        if (cpf.length < 11) return send(400, { error: 'Informe um CPF válido (11 dígitos) para faturamento Asaas.' });
-        if (phone.length < 10) return send(400, { error: 'Informe seu WhatsApp com DDD.' });
+        if (name.length < 3) return send(400, { error: 'Informe seu nome e sobrenome.' });
+        if (!isValidCpf(cpf)) return send(400, { error: 'CPF inválido. Digite um CPF real de 11 dígitos para emissão da cobrança Asaas.' });
+        if (phone.length < 10) return send(400, { error: 'Informe seu WhatsApp válido com DDD.' });
+
+        // Se já existir conta com mesmo CPF ou telefone, atualiza e reutiliza
+        let existing = db.members.find(m => m.cpf === cpf || m.phone.endsWith(phone.slice(-9)));
+        if (existing) {
+          existing.name = name;
+          existing.cpf = cpf;
+          existing.phone = phone.startsWith('55') ? phone : '55' + phone;
+          existing.pin = pin || existing.pin;
+          saveDb(db);
+          const token = crypto.randomBytes(20).toString('hex');
+          activeSessions.add(token);
+          return send(200, { ok: true, token, memberId: existing.id, state: db });
+        }
 
         const initials = name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
         const nextMonth = new Date(Date.now() + 30 * 86400000).toLocaleDateString('pt-BR');
@@ -237,11 +332,13 @@ const server = http.createServer((req, res) => {
           price: isGold ? 109.90 : 69.90,
           cutsUsed: 0,
           cutsLimit: isGold ? 4 : 2,
-          status: 'active',
+          status: 'pending_payment', // Só vira 'active' após o Asaas aprovar o pagamento!
           daysOverdue: 0,
           feeAdded: 0,
           dueDate: nextMonth,
           avatar: initials,
+          scheduledDays: [],
+          storeOrders: [],
           visagism: {
             shape: clean(payload.shape || 'Oval'),
             cut: clean(payload.cut || 'Taper Fade California + Barba Alinhada'),
@@ -256,36 +353,150 @@ const server = http.createServer((req, res) => {
         return send(200, { ok: true, token, memberId: newMember.id, state: db });
       }
 
-      // Integração Financeira Asaas: Assinatura Cartão Recorrente, PIX Automático ou Corte Avulso
+      // GERAÇÃO DE QR CODE PIX REAL NA API DE PRODUÇÃO DO ASAAS
+      if (req.method === 'POST' && urlPath === '/api/asaas/pix-qrcode') {
+        const m = db.members.find(x => x.id === payload.memberId);
+        if (!m) {
+          return send(400, { error: 'Crie sua conta com CPF válido primeiro para gerar o QR Code PIX nominal no Asaas.' });
+        }
+        const amount = Number(payload.amount || m.price || 40.00);
+        const title = clean(payload.title || m.plan || 'Assinatura Barbearia Califórnia');
+
+        if (!ASAAS_API_KEY) {
+          return send(500, { error: 'Chave de API do Asaas não configurada no servidor.' });
+        }
+
+        try {
+          const asaasHeaders = {
+            'Content-Type': 'application/json',
+            'access_token': ASAAS_API_KEY,
+            'User-Agent': 'BarbeariaCaliforniaSaaS/1.0'
+          };
+
+          const cust = await ensureAsaasCustomer(m, asaasHeaders);
+          if (cust.error) return send(400, { error: `❌ Asaas: ${cust.error}` });
+
+          const dueDate = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+          const payRes = await fetch(`${ASAAS_BASE_URL}/payments`, {
+            method: 'POST',
+            headers: asaasHeaders,
+            body: JSON.stringify({
+              customer: cust.id,
+              billingType: 'PIX',
+              value: amount,
+              dueDate,
+              description: `${title} — Barbearia Califórnia`,
+              externalReference: m.id
+            })
+          });
+          const payData = await payRes.json();
+          if (!payRes.ok || (payData.errors && payData.errors.length > 0)) {
+            return send(400, { error: `❌ Asaas PIX: ${payData.errors?.[0]?.description || 'Não foi possível gerar a cobrança.'}` });
+          }
+
+          const qrRes = await fetch(`${ASAAS_BASE_URL}/payments/${payData.id}/pixQrCode`, {
+            method: 'GET',
+            headers: asaasHeaders
+          });
+          const qrData = await qrRes.json();
+          if (!qrRes.ok || !qrData.encodedImage) {
+            return send(400, { error: 'Erro ao obter imagem do QR Code PIX no Asaas.' });
+          }
+
+          m.lastPendingPaymentId = payData.id;
+          m.lastPendingPlan = title;
+          m.lastPendingAmount = amount;
+          saveDb(db);
+
+          return send(200, {
+            ok: true,
+            paymentId: payData.id,
+            encodedImage: qrData.encodedImage,
+            payload: qrData.payload,
+            expirationDate: qrData.expirationDate,
+            amount
+          });
+        } catch (err) {
+          return send(500, { error: 'Falha de conexão com a API do Asaas.' });
+        }
+      }
+
+      // VERIFICAÇÃO REAL DE PAGAMENTO PIX NO ASAAS (Impede ativar sem ter pago de verdade!)
+      if (req.method === 'POST' && urlPath === '/api/asaas/check-payment') {
+        const m = db.members.find(x => x.id === payload.memberId);
+        const paymentId = clean(payload.paymentId || m?.lastPendingPaymentId || '');
+        if (!paymentId) return send(400, { error: 'Nenhuma cobrança PIX ativa encontrada.' });
+
+        try {
+          const asaasHeaders = {
+            'Content-Type': 'application/json',
+            'access_token': ASAAS_API_KEY,
+            'User-Agent': 'BarbeariaCaliforniaSaaS/1.0'
+          };
+          const checkRes = await fetch(`${ASAAS_BASE_URL}/payments/${paymentId}`, {
+            method: 'GET',
+            headers: asaasHeaders
+          });
+          const checkData = await checkRes.json();
+
+          if (checkData.status !== 'RECEIVED' && checkData.status !== 'CONFIRMED') {
+            return send(402, {
+              error: '⏳ Pagamento PIX ainda aguarda compensação no banco! Escaneie o QR Code ou pague o PIX Copia e Cola no app do seu banco antes de confirmar.'
+            });
+          }
+
+          // Pagamento PIX realmente confirmado pelo Asaas!
+          if (m) {
+            const planName = m.lastPendingPlan || payload.plan || m.plan;
+            const isGold = planName.includes('Gold');
+            const isAvulso = planName.includes('Avulso');
+            const amount = Number(checkData.value || m.lastPendingAmount || m.price);
+
+            if (!isAvulso) {
+              m.plan = isGold ? 'Califórnia Gold (4 Cortes/mês)' : 'Califórnia Club (2 Cortes/mês)';
+              m.price = amount;
+              m.cutsLimit = isGold ? 4 : 2;
+              m.status = 'active';
+              m.daysOverdue = 0;
+              m.dueDate = new Date(Date.now() + 30 * 86400000).toLocaleDateString('pt-BR');
+            } else {
+              db.shop.extraRevenue += amount;
+            }
+
+            db.transactions.unshift({
+              id: 't' + Date.now(),
+              date: `Hoje ${nowTime()}`,
+              desc: `${planName.split(' (')[0]} — ${m.name}`,
+              type: isAvulso ? 'avulso' : 'assinatura',
+              method: 'PIX Confirmado Asaas',
+              amount
+            });
+            saveDb(db);
+          }
+          return send(200, db);
+        } catch {
+          return send(500, { error: 'Erro ao consultar status do PIX no Asaas.' });
+        }
+      }
+
+      // COBRANÇA REAL NO CARTÃO DE CRÉDITO (Validação Bancária Luhn + Autorização na Operadora via Asaas)
       if (req.method === 'POST' && urlPath === '/api/asaas/subscribe') {
         const planName = clean(payload.plan || 'Califórnia Gold (4 Cortes/mês)');
         const isGold = planName.includes('Gold');
         const isAvulso = planName === 'Corte Avulso';
         const amount = Number(payload.amount || (isAvulso ? 40.00 : isGold ? 109.90 : 69.90));
-        const methodLabel = clean(payload.methodLabel || 'PIX Automático Asaas');
 
-        let m = db.members.find(x => x.id === payload.memberId);
-
-        // Se for Corte Avulso sem cadastro, registra direto no Livro Caixa
-        if (isAvulso && !m) {
-          db.shop.extraRevenue += amount;
-          db.transactions.unshift({
-            id: 't' + Date.now(),
-            date: `Hoje ${nowTime()}`,
-            desc: `Corte Avulso — ${clean(payload.customerName || 'Cliente Balcão')}`,
-            type: 'avulso',
-            method: methodLabel,
-            amount
-          });
-          saveDb(db);
-          return send(200, db);
-        }
-
+        const m = db.members.find(x => x.id === payload.memberId);
         if (!m) {
-          return send(400, { error: 'Crie sua conta rápida primeiro para vincular seu CPF e WhatsApp à assinatura!' });
+          return send(400, { error: 'Crie sua conta rápida primeiro para vincular seu CPF e WhatsApp à cobrança!' });
         }
 
-        // Se ASAAS_API_KEY estiver configurada no .env, cria cliente + assinatura real na API v3 do Asaas
+        // Validação estrita do Cartão de Crédito (Impede passar dados falsos/aleatórios!)
+        const cardError = validateCreditCard(payload.creditCard);
+        if (cardError) {
+          return send(400, { error: `❌ ${cardError}` });
+        }
+
         if (ASAAS_API_KEY && global.fetch) {
           try {
             const asaasHeaders = {
@@ -293,40 +504,65 @@ const server = http.createServer((req, res) => {
               'access_token': ASAAS_API_KEY,
               'User-Agent': 'BarbeariaCaliforniaSaaS/1.0'
             };
-            if (!m.asaasCustomerId) {
-              const custRes = await fetch(`${ASAAS_BASE_URL}/customers`, {
-                method: 'POST',
-                headers: asaasHeaders,
-                body: JSON.stringify({
-                  name: m.name,
-                  cpfCnpj: m.cpf || '24971563792',
-                  mobilePhone: String(m.phone || '').replace(/^55/, ''),
-                  externalReference: m.id
-                })
-              });
-              const custData = await custRes.json();
-              if (custData && custData.id) m.asaasCustomerId = custData.id;
+
+            const cust = await ensureAsaasCustomer(m, asaasHeaders);
+            if (cust.error) return send(400, { error: `❌ Asaas: ${cust.error}` });
+
+            const cc = payload.creditCard;
+            const [expM, expY] = String(cc.expiry).split('/');
+            const expYear4 = expY.length === 2 ? '20' + expY : expY;
+            const mobileClean = String(m.phone || '').replace(/^55/, '');
+
+            const endpoint = isAvulso ? `${ASAAS_BASE_URL}/payments` : `${ASAAS_BASE_URL}/subscriptions`;
+            const dueStr = new Date().toISOString().slice(0, 10);
+
+            const bodyObj = {
+              customer: cust.id,
+              billingType: 'CREDIT_CARD',
+              value: amount,
+              description: `${planName} - Barbearia Califórnia`,
+              externalReference: m.id,
+              creditCard: {
+                holderName: String(cc.holderName).trim(),
+                number: String(cc.number).replace(/\D/g, ''),
+                expiryMonth: String(expM).padStart(2, '0'),
+                expiryYear: String(expYear4),
+                ccv: String(cc.cvv).replace(/\D/g, '')
+              },
+              creditCardHolderInfo: {
+                name: String(cc.holderName).trim(),
+                email: `${m.id}@barbeariacalifornia.com.br`,
+                cpfCnpj: String(cc.cpf).replace(/\D/g, ''),
+                postalCode: '78435000',
+                addressNumber: '100',
+                phone: mobileClean,
+                mobilePhone: mobileClean
+              }
+            };
+            if (isAvulso) bodyObj.dueDate = dueStr;
+            else {
+              bodyObj.nextDueDate = dueStr;
+              bodyObj.cycle = 'MONTHLY';
             }
-            if (m.asaasCustomerId && !isAvulso) {
-              await fetch(`${ASAAS_BASE_URL}/subscriptions`, {
-                method: 'POST',
-                headers: asaasHeaders,
-                body: JSON.stringify({
-                  customer: m.asaasCustomerId,
-                  billingType: payload.billingType === 'CREDIT_CARD' ? 'CREDIT_CARD' : 'PIX',
-                  value: amount,
-                  nextDueDate: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
-                  cycle: 'MONTHLY',
-                  externalReference: m.id,
-                  description: `${planName} - Barbearia Califórnia`
-                })
-              });
+
+            const subRes = await fetch(endpoint, {
+              method: 'POST',
+              headers: asaasHeaders,
+              body: JSON.stringify(bodyObj)
+            });
+            const subData = await subRes.json();
+
+            if (!subRes.ok || (subData.errors && subData.errors.length > 0)) {
+              const asaasErr = subData.errors?.[0]?.description || 'Transação não autorizada pela operadora do cartão.';
+              return send(400, { error: `❌ Cartão Recusado: ${asaasErr}` });
             }
-          } catch {}
+          } catch {
+            return send(500, { error: 'Erro ao processar cartão junto à operadora Asaas.' });
+          }
         }
 
         if (!isAvulso) {
-          m.plan = planName;
+          m.plan = isGold ? 'Califórnia Gold (4 Cortes/mês)' : 'Califórnia Club (2 Cortes/mês)';
           m.price = amount;
           m.cutsLimit = isGold ? 4 : 2;
           m.status = 'active';
@@ -341,11 +577,61 @@ const server = http.createServer((req, res) => {
           date: `Hoje ${nowTime()}`,
           desc: `${planName.split(' (')[0]} — ${m.name}`,
           type: isAvulso ? 'avulso' : 'assinatura',
-          method: methodLabel,
+          method: 'Cartão de Crédito Asaas',
           amount
         });
         saveDb(db);
         return send(200, db);
+      }
+
+      // AGENDAMENTO DOS DIAS DO MÊS DO ASSINANTE (4 dias no Gold VIP / 2 dias no Club)
+      if (req.method === 'POST' && urlPath === '/api/member/schedule-days') {
+        const m = db.members.find(x => x.id === payload.memberId);
+        if (!m || m.status !== 'active') {
+          return send(403, { error: 'Ative sua assinatura (Gold VIP ou Club) para reservar seus dias fixos do mês na agenda!' });
+        }
+        const days = Array.isArray(payload.days) ? payload.days.map(d => clean(d)).filter(Boolean) : [];
+        const maxDays = m.cutsLimit || (m.plan.includes('Gold') ? 4 : 2);
+        if (days.length > maxDays) {
+          return send(400, { error: `Seu plano permite reservar até ${maxDays} dias por mês.` });
+        }
+        m.scheduledDays = days;
+        saveDb(db);
+        return send(200, db);
+      }
+
+      // RESERVA DE BEBIDAS E PRODUTOS FÍSICOS COM DESCONTO VIP (10% Gold VIP / 5% Club)
+      if (req.method === 'POST' && urlPath === '/api/store/order') {
+        const m = db.members.find(x => x.id === payload.memberId);
+        const itemName = clean(payload.itemName || 'Produto Barbearia');
+        const basePrice = Number(payload.basePrice || 10.00);
+
+        const isGold = m && m.status === 'active' && m.plan.includes('Gold');
+        const isClub = m && m.status === 'active' && !isGold;
+        const discountPct = isGold ? 10 : isClub ? 5 : 0;
+        const finalPrice = Number((basePrice * (1 - discountPct / 100)).toFixed(2));
+
+        if (m) {
+          if (!m.storeOrders) m.storeOrders = [];
+          m.storeOrders.unshift({
+            id: 'ord' + Date.now(),
+            item: itemName,
+            discountPct,
+            price: finalPrice,
+            date: `Hoje ${nowTime()}`
+          });
+        }
+        db.shop.extraRevenue += finalPrice;
+        db.transactions.unshift({
+          id: 't' + Date.now(),
+          date: `Hoje ${nowTime()}`,
+          desc: `Bar/Loja: ${itemName} (${discountPct}% OFF VIP) — ${m ? m.name : 'Cliente Balcão'}`,
+          type: 'produto',
+          method: 'Comanda / Reserva VIP',
+          amount: finalPrice
+        });
+        saveDb(db);
+        return send(200, { state: sanitizeDbForRole(db, req), finalPrice, discountPct, itemName });
       }
 
       // Webhook Oficial do Asaas (Baixa Automática de PIX Automático e Cartão Recorrente)
@@ -357,7 +643,7 @@ const server = http.createServer((req, res) => {
         const event = payload.event || 'PAYMENT_RECEIVED';
         const p = payload.payment || {};
         const member = db.members.find(x => x.id === p.externalReference || x.asaasCustomerId === p.customer)
-          || db.members.find(x => x.status === 'overdue')
+          || db.members.find(x => x.status === 'overdue' || x.status === 'pending_payment')
           || db.members[0];
 
         if (member) {
@@ -392,13 +678,14 @@ const server = http.createServer((req, res) => {
         if (!member && guestName.length < 2) {
           return send(400, { error: 'Informe seu nome para entrar na fila por ordem de chegada.' });
         }
+        const isActiveSub = member && member.status === 'active';
         const activeCount = db.queue.length;
         db.queue.push({
           id: 'q' + Date.now(),
-          memberId: member ? member.id : null,
+          memberId: isActiveSub ? member.id : null,
           name: member ? member.name : guestName,
-          tag: member ? member.plan.split(' (')[0] : 'Avulso R$ 40',
-          service: clean(payload.service || (member ? member.visagism.cut : 'Corte Ordem de Chegada (R$ 40)')),
+          tag: isActiveSub ? member.plan.split(' (')[0] : 'Avulso R$ 40',
+          service: clean(payload.service || (isActiveSub ? member.visagism.cut : 'Corte Ordem de Chegada (R$ 40)')),
           status: activeCount === 0 ? 'in_chair' : 'waiting',
           joinedAt: nowTime(),
           estMin: activeCount * 18
@@ -444,7 +731,7 @@ const server = http.createServer((req, res) => {
         return send(200, db);
       }
 
-      // Acordo de Atraso (+R$ 5,00) com lançamento no Livro Caixa
+      // Acordo de Atraso (+R$ 5,00)
       if (req.method === 'POST' && urlPath === '/api/crm/reschedule-payment') {
         const m = db.members.find(x => x.id === payload.memberId);
         if (!m) return send(404, { error: 'Cliente não encontrado' });
@@ -466,8 +753,9 @@ const server = http.createServer((req, res) => {
         return send(200, db);
       }
 
-      // Pagamento de Mensalidade / Checkout PIX
+      // Baixa Manual PIX pelo Admin
       if (req.method === 'POST' && urlPath === '/api/crm/pay-now') {
+        if (!isAdminRequest(req)) return send(403, { error: 'Apenas o administrador pode dar baixa manual.' });
         const m = db.members.find(x => x.id === payload.memberId);
         if (!m) return send(404, { error: 'Cliente não encontrado' });
         m.status = 'active';
@@ -478,18 +766,18 @@ const server = http.createServer((req, res) => {
           date: `Hoje ${nowTime()}`,
           desc: `Mensalidade ${m.plan.split(' (')[0]} — ${m.name}`,
           type: 'assinatura',
-          method: clean(payload.method || 'PIX Automático Asaas'),
+          method: clean(payload.method || 'Baixa Manual Admin'),
           amount: m.price
         });
         saveDb(db);
         return send(200, db);
       }
 
-      // Salvar Visagismo (Protegido no Servidor: Exclusivo Plano Gold VIP)
+      // Salvar Visagismo (Exclusivo Plano Gold VIP Ativo)
       if (req.method === 'POST' && urlPath === '/api/visagism/save') {
         const m = db.members.find(x => x.id === payload.memberId);
-        if (!m || !m.plan.includes('Gold') || m.status === 'overdue') {
-          return send(403, { error: 'Exclusivo para assinantes do plano Califórnia Gold VIP em dia.' });
+        if (!m || !m.plan.includes('Gold') || m.status !== 'active') {
+          return send(403, { error: 'Exclusivo para assinantes do plano Califórnia Gold VIP com pagamento confirmado.' });
         }
         m.visagism = {
           shape: clean(payload.shape),
@@ -506,7 +794,6 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // Rotas dedicadas do Painel Administrativo no mesmo domínio (/admin, /rogerio, /painel-admin)
   let routeFile = 'index.html';
   if (['/admin', '/admin.html', '/rogerio', '/painel', '/painel-admin'].includes(urlPath)) {
     routeFile = 'admin.html';

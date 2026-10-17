@@ -208,6 +208,21 @@ function applyTheme(theme) {
 // ================= LOGIN, CADASTRO & SESSÃO DO CLIENTE =================
 let selectedPaymentMethod = 'PIX_AUTOMATICO';
 let clientAuthToken = localStorage.getItem('cal_client_token') || '';
+let currentPixPaymentId = null;
+let selectedCalendarDays = [];
+
+function handleAccountButtonClick() {
+  const m = state.members.find(x => x.id === currentMemberId);
+  if (m) {
+    const vipSection = document.getElementById('vip-area-section');
+    if (vipSection) {
+      vipSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      toast(`👑 Painel do Assinante de ${m.name.split(' ')[0]} aberto!`);
+      return;
+    }
+  }
+  openLoginModal('login');
+}
 
 function switchAuthTab(tab) {
   const isLogin = tab === 'login';
@@ -252,6 +267,7 @@ function closeLoginModal() {
 function logoutClient() {
   currentMemberId = 'avulso';
   clientAuthToken = '';
+  selectedCalendarDays = [];
   localStorage.removeItem('cal_member_id');
   localStorage.removeItem('cal_client_token');
   closeLoginModal();
@@ -270,9 +286,14 @@ async function submitClientLogin() {
       clientAuthToken = res.token;
       localStorage.setItem('cal_client_token', res.token);
     }
+    const m = state.members.find(x => x.id === currentMemberId);
+    selectedCalendarDays = Array.isArray(m?.scheduledDays) ? [...m.scheduledDays] : [];
     closeLoginModal();
     renderAll();
-    toast(`Bem-vindo de volta, ${res.name}!`);
+    toast(`👑 Bem-vindo, ${res.name}! Redirecionando para sua Área VIP...`);
+    setTimeout(() => {
+      document.getElementById('vip-area-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 180);
   } catch (e) {
     toast(e.message);
   }
@@ -313,13 +334,78 @@ async function submitClientRegister() {
       isGold ? 'plan_gold' : 'plan_club',
       currentMemberId
     );
-    toast('Conta criada! Conclua a assinatura via PIX Automático ou Cartão.');
+    toast('Cadastro validado! Realize o pagamento para ativar seu plano.');
   } catch (e) {
     toast(e.message);
   }
 }
 
-// ================= CHECKOUT FINANCEIRO ASAAS =================
+// ================= CHECKOUT FINANCEIRO ASAAS (QR CODE REAL & VALIDAÇÃO LUHN) =================
+function isValidCardLuhnClient(numStr) {
+  const digits = String(numStr || '').replace(/\D/g, '');
+  if (digits.length < 13 || digits.length > 19 || /^(\d)\1+$/.test(digits)) return false;
+  let sum = 0;
+  let shouldDouble = false;
+  for (let i = digits.length - 1; i >= 0; i--) {
+    let d = parseInt(digits.charAt(i), 10);
+    if (shouldDouble) {
+      d *= 2;
+      if (d > 9) d -= 9;
+    }
+    sum += d;
+    shouldDouble = !shouldDouble;
+  }
+  return sum % 10 === 0;
+}
+
+function copyPixPayload() {
+  const input = document.getElementById('pix-payload-input');
+  if (!input || !input.value || input.value.includes('Gerando')) {
+    return toast('Aguarde o QR Code PIX ser gerado...');
+  }
+  navigator.clipboard?.writeText(input.value);
+  toast('✔ Código PIX Copia e Cola copiado!');
+}
+
+async function loadRealPixQrCode(title, amount, memberId) {
+  const qrImg = document.getElementById('pix-qr-img');
+  const qrLoading = document.getElementById('pix-qr-loading');
+  const payloadInput = document.getElementById('pix-payload-input');
+  const statusHint = document.getElementById('pix-status-hint');
+
+  currentPixPaymentId = null;
+  if (qrImg) {
+    qrImg.classList.add('hidden');
+    qrImg.removeAttribute('src');
+  }
+  if (qrLoading) {
+    qrLoading.classList.remove('hidden');
+    qrLoading.textContent = 'Gerando QR Code PIX oficial Asaas...';
+  }
+  if (payloadInput) payloadInput.value = 'Gerando código PIX Copia e Cola...';
+  if (statusHint) statusHint.textContent = 'Conectando ao Banco Central via Asaas...';
+
+  try {
+    const res = await api('/api/asaas/pix-qrcode', {
+      memberId,
+      amount,
+      description: `Barbearia Califórnia - ${title}`
+    });
+    currentPixPaymentId = res.paymentId;
+    if (qrImg && res.encodedImage) {
+      qrImg.src = `data:image/png;base64,${res.encodedImage}`;
+      qrImg.classList.remove('hidden');
+    }
+    if (qrLoading) qrLoading.classList.add('hidden');
+    if (payloadInput) payloadInput.value = res.payload || '';
+    if (statusHint) statusHint.textContent = '🟢 QR Code PIX pronto! Escaneie no app do seu banco e clique abaixo.';
+  } catch (e) {
+    if (qrLoading) qrLoading.textContent = e.message || 'Crie sua conta c/ CPF válido para gerar o PIX.';
+    if (payloadInput) payloadInput.value = '';
+    if (statusHint) statusHint.textContent = '⚠️ Faça login ou cadastre seu CPF para emitir o QR Code PIX.';
+  }
+}
+
 function switchPaymentMethod(method) {
   selectedPaymentMethod = method;
   const isPix = method === 'PIX_AUTOMATICO';
@@ -332,25 +418,31 @@ function switchPaymentMethod(method) {
     ? 'py-2.5 rounded-xl btn-ln-primary transition'
     : 'py-2.5 rounded-xl opacity-75 hover:opacity-100 transition';
   document.getElementById('btn-confirm-checkout').textContent = isPix
-    ? 'Confirmar Pagamento PIX Automático'
-    : 'Ativar Assinatura no Cartão de Crédito';
+    ? 'Já Paguei o PIX (Verificar no Banco)'
+    : 'Validar e Cobrar no Cartão de Crédito';
 }
 
 function openCheckoutModal(title, amount, actionType, memberId = null) {
   const m = state.members.find(x => x.id === (memberId || currentMemberId));
-  // Se o cliente clicou para assinar um plano recorrente mas ainda não criou conta, abre a aba de cadastro!
-  if (!m && (actionType === 'plan_gold' || actionType === 'plan_club')) {
-    toast('Crie sua conta rápida (CPF + WhatsApp) para ativar sua assinatura!');
-    openLoginModal('register', actionType === 'plan_gold' ? 'gold' : 'club');
+  // Exige conta com CPF validado para gerar cobrança PIX ou Cartão no Asaas
+  if (!m) {
+    toast('Crie sua conta rápida (CPF + WhatsApp) para emitir o PIX ou pagar no Cartão!');
+    openLoginModal('register', actionType === 'plan_club' ? 'club' : 'gold');
     return;
   }
 
   document.getElementById('chk-title').textContent = title;
-  document.getElementById('chk-desc').textContent = 'Asaas Pagamentos • PIX Automático ou Cartão';
+  document.getElementById('chk-desc').textContent = 'Asaas Pagamentos • Validação Bancária Oficial';
   document.getElementById('chk-amount').textContent = `R$ ${Number(amount).toFixed(2)}`;
-  pendingCheckoutAction = { title, amount: Number(amount), actionType, memberId: m ? m.id : null };
+  pendingCheckoutAction = { title, amount: Number(amount), actionType, memberId: m.id };
+  const cpfField = document.getElementById('cc-cpf');
+  if (cpfField && m.cpf && !cpfField.value) cpfField.value = m.cpf;
+  const nameField = document.getElementById('cc-name');
+  if (nameField && m.name && !nameField.value) nameField.value = m.name.toUpperCase();
+
   switchPaymentMethod('PIX_AUTOMATICO');
   document.getElementById('checkout-modal').classList.remove('hidden');
+  loadRealPixQrCode(title, Number(amount), m.id);
 }
 
 function closeCheckoutModal() {
@@ -360,40 +452,87 @@ function closeCheckoutModal() {
 async function confirmCheckoutPayment() {
   if (!pendingCheckoutAction) return closeCheckoutModal();
   const { title, amount, actionType, memberId } = pendingCheckoutAction;
-  const methodLabel = selectedPaymentMethod === 'CREDIT_CARD' ? 'Cartão Recorrente Asaas' : 'PIX Automático Asaas';
-  closeCheckoutModal();
+  const btn = document.getElementById('btn-confirm-checkout');
+  const origText = btn ? btn.textContent : '';
 
   try {
-    if (actionType === 'reschedule') {
-      state = await api('/api/crm/reschedule-payment', { memberId, method: methodLabel });
-      renderAll();
-      toast('Taxa de R$ 5,00 confirmada! Vencimento reajustado e fila liberada.');
-    } else if (actionType === 'pay_overdue') {
-      state = await api('/api/crm/pay-now', { memberId, method: methodLabel });
-      renderAll();
-      toast(`Pagamento via ${methodLabel} confirmado! Sua assinatura está em dia.`);
-    } else {
-      const targetPlan = (actionType === 'plan_gold' || title.includes('Gold'))
-        ? 'Califórnia Gold (4 Cortes/mês)'
-        : title.includes('Club')
-        ? 'Califórnia Club (2 Cortes/mês)'
-        : 'Corte Avulso';
-      const guestName = document.getElementById('queue-guest-name')?.value || 'Cliente Avulso';
-      state = await api('/api/asaas/subscribe', {
-        memberId,
-        customerName: guestName,
-        plan: targetPlan,
-        amount,
-        billingType: selectedPaymentMethod,
-        methodLabel
+    if (selectedPaymentMethod === 'PIX_AUTOMATICO') {
+      if (!currentPixPaymentId) {
+        return toast('Aguarde o QR Code PIX terminar de carregar.');
+      }
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Consultando Banco Central / Asaas...';
+      }
+      const res = await api('/api/asaas/check-payment', {
+        paymentId: currentPixPaymentId,
+        memberId
       });
+      state = res.state;
+      closeCheckoutModal();
       renderAll();
-      toast(targetPlan.includes('Gold')
-        ? `👑 Plano Gold VIP ativado via ${methodLabel}! Visagismo 3D 100% liberado!`
-        : `Pagamento confirmado via ${methodLabel}!`);
+      toast('👑 Pagamento PIX confirmado pelo banco! Seu plano e Área VIP estão liberados!');
+      setTimeout(() => {
+        document.getElementById('vip-area-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 200);
+      return;
     }
+
+    // Validação rigorosa de Cartão de Crédito antes de enviar ao Asaas
+    const number = document.getElementById('cc-number')?.value || '';
+    const holderName = document.getElementById('cc-name')?.value || '';
+    const expiry = document.getElementById('cc-expiry')?.value || '';
+    const cvv = document.getElementById('cc-cvv')?.value || '';
+    const cpf = document.getElementById('cc-cpf')?.value || '';
+
+    if (!isValidCardLuhnClient(number)) {
+      return toast('❌ Número de cartão inválido! Verifique os 16 dígitos.');
+    }
+    if (holderName.trim().split(/\s+/).length < 2) {
+      return toast('❌ Digite o nome e sobrenome impresso no cartão.');
+    }
+    if (!/^\d{2}\/\d{2,4}$/.test(expiry.trim())) {
+      return toast('❌ Validade inválida! Use o formato MM/AA (ex: 08/29).');
+    }
+    if (!/^\d{3,4}$/.test(cvv.trim())) {
+      return toast('❌ CVV inválido! Digite os 3 ou 4 dígitos de segurança.');
+    }
+
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Autorizando Cartão na Operadora...';
+    }
+
+    const targetPlan = (actionType === 'plan_gold' || title.includes('Gold'))
+      ? 'Califórnia Gold (4 Cortes/mês)'
+      : title.includes('Club')
+      ? 'Califórnia Club (2 Cortes/mês)'
+      : 'Corte Avulso';
+
+    state = await api('/api/asaas/subscribe', {
+      memberId,
+      plan: targetPlan,
+      amount,
+      billingType: 'CREDIT_CARD',
+      methodLabel: 'Cartão de Crédito Asaas',
+      creditCard: { number, holderName, expiry, cvv, cpf }
+    });
+
+    closeCheckoutModal();
+    renderAll();
+    toast('👑 Cartão autorizado com sucesso! Seu plano VIP foi ativado!');
+    setTimeout(() => {
+      document.getElementById('vip-area-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 200);
   } catch (e) {
     toast(e.message);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = origText || (selectedPaymentMethod === 'PIX_AUTOMATICO'
+        ? 'Já Paguei o PIX (Verificar no Banco)'
+        : 'Validar e Cobrar no Cartão de Crédito');
+    }
   }
 }
 
@@ -416,8 +555,11 @@ async function init() {
   requestAnimationFrame(renderSeamlessHeroCanvas);
   initMediaPipeFaceLandmarker();
   state = await api('/api/state');
-  if (!state.members.some(x => x.id === currentMemberId)) {
+  const m = state.members.find(x => x.id === currentMemberId);
+  if (!m) {
     currentMemberId = 'avulso';
+  } else {
+    selectedCalendarDays = Array.isArray(m.scheduledDays) ? [...m.scheduledDays] : [];
   }
   renderAll();
 }
@@ -425,6 +567,7 @@ async function init() {
 function renderAll() {
   renderQueueAndMember();
   renderVisagism();
+  renderVipArea();
   renderPlans();
   renderReviews();
 }
@@ -449,7 +592,7 @@ function renderQueueAndMember() {
     document.getElementById('card-member-status').textContent = 'Visitante';
     banner.classList.add('hidden');
   } else {
-    navName.textContent = m.name.split(' ')[0];
+    navName.textContent = `👑 ${m.name.split(' ')[0]}`;
     if (guestBox) guestBox.classList.add('hidden');
     const left = Math.max(0, m.cutsLimit - m.cutsUsed);
     document.getElementById('card-member-name').textContent = m.name;
@@ -461,7 +604,23 @@ function renderQueueAndMember() {
     document.getElementById('card-member-due').textContent = `Vencimento: ${m.dueDate}`;
 
     const st = document.getElementById('card-member-status');
-    if (m.status === 'overdue') {
+    if (m.status === 'pending_payment') {
+      st.className = 'px-3 py-1 rounded-full font-bold text-[11px] bg-amber-500/20 text-amber-400';
+      st.textContent = 'Aguardando Pagamento';
+      banner.classList.remove('hidden');
+      banner.innerHTML = `
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div class="space-y-1">
+            <span class="text-xs font-mono-ln font-bold uppercase tracking-wider text-[var(--accent)]">⏳ Ativação Pendente • Asaas</span>
+            <h3 class="text-base sm:text-lg font-extrabold">Olá, ${m.name.split(' ')[0]}! Conclua o pagamento do seu ${m.plan} para liberar seus ${m.cutsLimit} dias do mês e descontos no Bar.</h3>
+          </div>
+          <div class="flex flex-wrap gap-2.5 shrink-0">
+            <button onclick="openCheckoutModal('${m.plan}', ${m.price}, '${m.plan.includes('Gold') ? 'plan_gold' : 'plan_club'}', '${m.id}')" class="btn-ln-primary px-4 py-3 rounded-2xl text-xs font-bold">
+              💠 Gerar QR Code PIX / Pagar Agora (R$ ${m.price.toFixed(2)})
+            </button>
+          </div>
+        </div>`;
+    } else if (m.status === 'overdue') {
       st.className = 'px-3 py-1 rounded-full font-bold text-[11px] bg-rose-500/20 text-rose-500';
       st.textContent = `${m.daysOverdue} dias em atraso`;
       banner.classList.remove('hidden');
@@ -957,7 +1116,7 @@ async function analyzeImageFaceBiometrics(img) {
 // ================= VISAGISMO IA 3D (AMOSTRA GRÁTIS VS EXCLUSIVO GOLD VIP) =================
 function isCurrentUserGoldVip() {
   const m = state.members.find(x => x.id === currentMemberId);
-  return Boolean(m && m.plan.includes('Gold') && m.status !== 'overdue');
+  return Boolean(m && m.plan.includes('Gold') && (m.status === 'active' || m.status === 'rescheduled'));
 }
 
 function renderVisagism() {
@@ -1378,13 +1537,223 @@ async function saveVisagismChoice() {
   toast(`👑 Corte "${data.cut}" salvo oficialmente na sua ficha Gold VIP!`);
 }
 
+// ================= PAINEL VIP DO ASSINANTE: ESCOLHA DOS 4 DIAS DO MÊS + BAR & PRODUTOS COM DESCONTO =================
+const BAR_STORE_PRODUCTS = [
+  { id: 'heineken', name: 'Cerveja Heineken Long Neck (Trincando)', category: '🍺 Bebida Gelada', basePrice: 12.00, icon: '🍺' },
+  { id: 'corona', name: 'Corona Extra Long Neck 330ml', category: '🍺 Bebida Gelada', basePrice: 13.00, icon: '🍻' },
+  { id: 'monster', name: 'Energético Monster / Red Bull Gelado', category: '⚡ Bebida Gelada', basePrice: 14.00, icon: '⚡' },
+  { id: 'coca', name: 'Coca-Cola Zero / Guaraná Lata', category: '🥤 Bebida Gelada', basePrice: 6.50, icon: '🥤' },
+  { id: 'pomada', name: 'Pomada Modeladora Matte Califórnia (120g)', category: '💈 Produto Físico', basePrice: 45.00, icon: '💈' },
+  { id: 'balm', name: 'Kit Óleo & Balm Hidratante p/ Barba', category: '🧔 Produto Físico', basePrice: 55.00, icon: '🧴' }
+];
+
+function getAvailableMonthDays() {
+  const days = [];
+  const weekNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+  const now = new Date();
+  let d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  while (days.length < 18) {
+    if (d.getDay() !== 0) { // Segunda a Sábado (Barbearia aberta)
+      const dd = String(d.getDate()).padStart(2, '0');
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const wk = weekNames[d.getDay()];
+      days.push({
+        label: `${wk} ${dd}/${mm}`,
+        week: wk,
+        dateNum: `${dd}/${mm}`
+      });
+    }
+    d.setDate(d.getDate() + 1);
+  }
+  return days;
+}
+
+function toggleCalendarDay(dayLabel) {
+  const m = state.members.find(x => x.id === currentMemberId);
+  if (!m) {
+    toast('Faça login ou assine um plano para reservar seus dias no mês!');
+    openLoginModal('login');
+    return;
+  }
+  if (m.status !== 'active' && m.status !== 'rescheduled') {
+    toast('⏳ Conclua o pagamento da sua assinatura para liberar a agenda de dias do mês!');
+    openCheckoutModal(m.plan, m.price, m.plan.includes('Gold') ? 'plan_gold' : 'plan_club', m.id);
+    return;
+  }
+
+  const maxDays = m.cutsLimit || (m.plan.includes('Gold') ? 4 : 2);
+  const idx = selectedCalendarDays.indexOf(dayLabel);
+  if (idx >= 0) {
+    selectedCalendarDays.splice(idx, 1);
+  } else {
+    if (selectedCalendarDays.length >= maxDays) {
+      return toast(`Seu plano dá direito a ${maxDays} dias no mês! Desmarque um dia para trocar.`);
+    }
+    selectedCalendarDays.push(dayLabel);
+  }
+  renderVipArea();
+}
+
+async function saveSubscriberMonthlyDays() {
+  const m = state.members.find(x => x.id === currentMemberId);
+  if (!m) {
+    toast('Faça login na sua conta de assinante para salvar seus dias do mês!');
+    return openLoginModal('login');
+  }
+  if (m.status !== 'active' && m.status !== 'rescheduled') {
+    toast('⏳ Ative sua assinatura no PIX ou Cartão antes de reservar seus dias no mês!');
+    return openCheckoutModal(m.plan, m.price, m.plan.includes('Gold') ? 'plan_gold' : 'plan_club', m.id);
+  }
+  if (selectedCalendarDays.length === 0) {
+    return toast('Selecione pelo menos 1 dia livre no calendário acima!');
+  }
+
+  try {
+    const res = await api('/api/member/schedule-days', {
+      memberId: m.id,
+      days: selectedCalendarDays
+    });
+    state = res.state;
+    renderAll();
+    toast(`📅 Seus ${selectedCalendarDays.length} dias do mês foram reservados na ficha do Rogério!`);
+  } catch (e) {
+    toast(e.message);
+  }
+}
+
+async function orderStoreItem(itemName, basePrice) {
+  const m = state.members.find(x => x.id === currentMemberId);
+  if (!m) {
+    toast('Faça login na sua conta para reservar bebidas/produtos com desconto de assinante!');
+    return openLoginModal('login');
+  }
+  try {
+    const res = await api('/api/store/order', {
+      memberId: m.id,
+      itemName,
+      basePrice
+    });
+    state = res.state;
+    renderAll();
+    const ord = res.order;
+    toast(ord.discountPct > 0
+      ? `🍺 ${ord.item} reservado por R$ ${ord.finalPrice.toFixed(2)} (${ord.discountPct}% OFF VIP)!`
+      : `🍺 ${ord.item} reservado na sua comanda por R$ ${ord.finalPrice.toFixed(2)}!`);
+  } catch (e) {
+    toast(e.message);
+  }
+}
+
+function renderVipArea() {
+  const calGrid = document.getElementById('vip-calendar-grid');
+  const storeGrid = document.getElementById('vip-store-grid');
+  if (!calGrid || !storeGrid) return;
+
+  const m = state.members.find(x => x.id === currentMemberId);
+  const isPaidActive = Boolean(m && (m.status === 'active' || m.status === 'rescheduled'));
+  const isGold = Boolean(isPaidActive && m.plan.includes('Gold'));
+  const isClub = Boolean(isPaidActive && m.plan.includes('Club'));
+  const maxDays = m ? (m.cutsLimit || (m.plan.includes('Gold') ? 4 : 2)) : 4;
+  const discountPct = isGold ? 10 : isClub ? 5 : 0;
+
+  const statusPill = document.getElementById('vip-plan-status-pill');
+  const counterEl = document.getElementById('vip-days-counter');
+  const summaryEl = document.getElementById('vip-selected-summary');
+  const discBadge = document.getElementById('vip-discount-badge');
+
+  if (statusPill) {
+    if (isGold) {
+      statusPill.className = 'px-4 py-2 rounded-2xl bg-emerald-500/15 text-emerald-400 text-xs font-bold border border-emerald-500/30';
+      statusPill.textContent = `👑 ${m.name.split(' ')[0]} • Gold VIP Ativo (4 Dias/Mês + 10% OFF no Bar)`;
+    } else if (isClub) {
+      statusPill.className = 'px-4 py-2 rounded-2xl bg-emerald-500/15 text-emerald-400 text-xs font-bold border border-emerald-500/30';
+      statusPill.textContent = `✦ ${m.name.split(' ')[0]} • Club Ativo (2 Dias/Mês + 5% OFF no Bar)`;
+    } else if (m && m.status === 'pending_payment') {
+      statusPill.className = 'px-4 py-2 rounded-2xl bg-amber-500/15 text-amber-400 text-xs font-bold border border-amber-500/30';
+      statusPill.textContent = `⏳ ${m.name.split(' ')[0]} • Pagamento Pendente (Ative p/ Liberar Seus ${maxDays} Dias)`;
+    } else {
+      statusPill.className = 'px-4 py-2 rounded-2xl subtle-ln text-xs font-bold text-[var(--accent)]';
+      statusPill.textContent = '🔒 Faça Login ou Assine o Gold VIP p/ Reservar Seus 4 Dias do Mês';
+    }
+  }
+
+  if (counterEl) {
+    counterEl.textContent = `${selectedCalendarDays.length}/${maxDays} Dias`;
+  }
+
+  if (summaryEl) {
+    summaryEl.textContent = selectedCalendarDays.length > 0
+      ? `✅ Seus dias escolhidos no mês: ${selectedCalendarDays.join('  •  ')}`
+      : isPaidActive
+      ? `Toque em até ${maxDays} datas livres acima para deixar seus cortes do mês pré-agendados.`
+      : 'Assinantes Gold VIP escolhem seus 4 dias livres no mês e garantem prioridade na cadeira.';
+  }
+
+  if (discBadge) {
+    discBadge.textContent = isGold
+      ? '👑 10% OFF ATIVO (GOLD)'
+      : isClub
+      ? '✦ 5% OFF ATIVO (CLUB)'
+      : '5% A 10% OFF P/ ASSINANTES';
+  }
+
+  const availDays = getAvailableMonthDays();
+  calGrid.innerHTML = availDays.map(d => {
+    const isSelected = selectedCalendarDays.includes(d.label);
+    return `
+      <button onclick="toggleCalendarDay('${d.label}')" class="p-2.5 rounded-2xl text-center transition border ${
+        isSelected
+          ? 'btn-ln-primary border-[#d96b43] shadow-lg scale-[1.02]'
+          : 'subtle-ln border-transparent hover:border-[#d96b43]/50'
+      }">
+        <div class="text-[10px] font-mono-ln uppercase opacity-75">${d.week}</div>
+        <div class="text-sm font-extrabold mt-0.5">${d.dateNum}</div>
+        <div class="text-[9px] font-bold mt-0.5 ${isSelected ? 'text-white' : 'text-emerald-400'}">
+          ${isSelected ? '✓ Seu Dia' : 'Livre'}
+        </div>
+      </button>
+    `;
+  }).join('');
+
+  storeGrid.innerHTML = BAR_STORE_PRODUCTS.map(item => {
+    const goldPrice = +(item.basePrice * 0.90).toFixed(2);
+    const clubPrice = +(item.basePrice * 0.95).toFixed(2);
+    const userFinalPrice = discountPct > 0 ? +(item.basePrice * (1 - discountPct / 100)).toFixed(2) : item.basePrice;
+
+    return `
+      <div class="subtle-ln rounded-2xl p-4 flex flex-col justify-between gap-3 border border-[var(--border)]">
+        <div class="space-y-1.5">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-[10px] font-mono-ln uppercase px-2 py-0.5 rounded-full card-ln text-[var(--accent)] font-bold">${item.category}</span>
+            <span class="text-[10px] font-bold text-emerald-400">Gold -10% • Club -5%</span>
+          </div>
+          <h4 class="font-extrabold text-sm leading-snug">${item.icon} ${item.name}</h4>
+        </div>
+        <div class="pt-2 border-t border-[var(--border)] flex items-center justify-between gap-2">
+          <div>
+            <div class="text-[10px] line-through opacity-50">Normal: R$ ${item.basePrice.toFixed(2)}</div>
+            <div class="font-mono-ln font-extrabold text-sm text-emerald-400">
+              ${isGold ? `R$ ${goldPrice.toFixed(2)} (Seu Preço VIP)` : isClub ? `R$ ${clubPrice.toFixed(2)} (Seu Preço Club)` : `VIP Gold: R$ ${goldPrice.toFixed(2)}`}
+            </div>
+          </div>
+          <button onclick="orderStoreItem('${item.name}', ${item.basePrice})" class="px-3 py-2 rounded-xl text-[11px] font-bold ${
+            discountPct > 0 ? 'btn-ln-primary' : 'btn-ln-ghost'
+          } shrink-0">
+            🍺 Pedir (R$ ${userFinalPrice.toFixed(2)})
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
 // ================= PLANOS & CHECKOUT =================
 function setCalcCuts(n) {
   document.getElementById('calc-2').className = n === 2 ? 'px-3 py-1.5 rounded-xl text-xs font-bold btn-ln-primary' : 'px-3 py-1.5 rounded-xl text-xs font-bold subtle-ln';
   document.getElementById('calc-4').className = n === 4 ? 'px-3 py-1.5 rounded-xl text-xs font-bold btn-ln-primary' : 'px-3 py-1.5 rounded-xl text-xs font-bold subtle-ln';
   document.getElementById('calc-summary').textContent = n === 2
-    ? '2 cortes/mês = Economize R$ 121/ano no Club'
-    : '4 cortes/mês = Economize R$ 601/ano no Gold VIP';
+    ? '2 cortes/mês = Economize R$ 121/ano + 5% OFF no Bar'
+    : '4 cortes/mês = Economize R$ 601/ano + 10% OFF no Bar';
 }
 
 function renderPlans() {
@@ -1395,16 +1764,16 @@ function renderPlans() {
         'Atendimento por ordem de chegada',
         'Acesso à fila ao vivo no celular',
         '🔒 Visagismo IA: Apenas Amostra (1 ângulo)',
-        'Sem fidelidade mensal'
+        'Sem desconto no Bar e Produtos Físicos'
       ],
       featured: false, btn: 'Pagar Corte Avulso (R$ 40)'
     },
     {
       name: 'Califórnia Club (2x/mês)', price: 'R$ 69,90/mês', amount: 69.90, action: 'plan_club', sub: 'Sai a R$ 34,95 por corte (Anual)',
       items: [
-        '2 Cortes todo mês garantidos',
-        'Relocação de dia c/ antecedência',
-        'Acordo flexível se atrasar (+R$ 5)',
+        '📅 Escolha seus 2 dias livres de corte no mês',
+        '🍺 5% OFF em Bebidas (Heineken/Monster) e Pomadas',
+        'Relocação de dia c/ antecedência + Acordo flexível',
         '🔒 Visagismo IA: Apenas Amostra (1 ângulo)'
       ],
       featured: false, btn: 'Assinar Califórnia Club'
@@ -1412,9 +1781,9 @@ function renderPlans() {
     {
       name: 'Califórnia Gold VIP (4x/mês)', price: 'R$ 109,90/mês', amount: 109.90, action: 'plan_gold', sub: 'Sai a R$ 27,47 por corte (31% OFF)',
       items: [
-        '4 Cortes no mês (Toda semana alinhado)',
-        '👑 Visagismo IA 3D OFICIAL LIBERADO (3 Ângulos)',
-        '💾 Salvar corte ideal direto na ficha do barbeiro',
+        '📅 Escolha seus 4 dias livres no mês (1 por semana)',
+        '🍺 10% OFF em Todas as Bebidas do Bar e Produtos Físicos',
+        '👑 Visagismo IA 3D OFICIAL LIBERADO (3 Ângulos + Ficha)',
         'Relocação livre + Economia de R$ 601,20/ano'
       ],
       featured: true, btn: '👑 Assinar Gold VIP (Liberar Tudo)'

@@ -94,13 +94,15 @@ function renderAdmin() {
           <div class="flex flex-wrap items-center gap-2">
             <strong class="text-sm">${m.name}</strong>
             <span class="text-[10px] px-2.5 py-0.5 rounded-full font-bold ${
-              m.status === 'overdue' ? 'bg-rose-500/20 text-rose-500' : 'accent-badge'
+              m.status === 'overdue' ? 'bg-rose-500/20 text-rose-500' : m.status === 'pending_payment' ? 'bg-amber-500/20 text-amber-400' : 'accent-badge'
             }">
-              ${m.status === 'overdue' ? `⚠️ ${m.daysOverdue} dias atrasado` : m.status === 'rescheduled' ? `📅 Adiado p/ ${m.dueDate} (+R$ ${m.feeAdded})` : '✅ Em Dia'}
+              ${m.status === 'overdue' ? `⚠️ ${m.daysOverdue} dias atrasado` : m.status === 'pending_payment' ? '⏳ Aguardando Pagamento' : m.status === 'rescheduled' ? `📅 Adiado p/ ${m.dueDate} (+R$ ${m.feeAdded})` : '✅ Em Dia'}
             </span>
           </div>
           <p class="text-xs opacity-75">${m.plan} • <strong>R$ ${Number(m.price).toFixed(2)}/mês</strong> • Cortes: <strong>${m.cutsUsed}/${m.cutsLimit}</strong> • WhatsApp: ${m.phone || '-'}</p>
           <p class="text-[11px] text-[#c85a32] font-semibold truncate">🧠 Visagismo IA: Rosto ${m.visagism?.shape || 'Oval'} → ${m.visagism?.cut || 'Taper Fade'}</p>
+          <p class="text-[11px] text-emerald-400 font-semibold">📅 Dias Reservados (${(m.scheduledDays || []).length}/${m.cutsLimit}): ${(m.scheduledDays && m.scheduledDays.length) ? m.scheduledDays.join(' • ') : 'Nenhum dia agendado ainda'}</p>
+          ${(m.storeOrders && m.storeOrders.length) ? `<p class="text-[11px] opacity-85">🍺 Comanda/Bar: ${m.storeOrders.slice(0, 3).map(o => `${o.item} (R$ ${Number(o.price).toFixed(2)})`).join(', ')}</p>` : ''}
         </div>
         <div class="flex items-center gap-2 shrink-0">
           ${m.status === 'overdue' ? `
