@@ -374,7 +374,7 @@
           </h1>
 
           <p class="text-sm sm:text-base lg:text-lg opacity-80 leading-relaxed max-w-lg">
-            Role suavemente para ver a transição do corte ao vivo. Entre na fila de casa mantendo a ordem de chegada e pague menos por corte no Clube Anual.
+            Degradê na régua, barba alinhada na navalha e visagismo sob medida para o seu estilo. A tradição da ordem de chegada na Av. Mato Grosso, agora com fila ao vivo no celular e Clube VIP de assinatura.
           </p>
 
           <!-- CTAs Diretos -->
@@ -528,23 +528,35 @@
         </div>
 
         <div class="grid lg:grid-cols-12 gap-5 sm:gap-6 items-start">
-          <div class="lg:col-span-4 space-y-4 min-w-0">
-            <div class="relative rounded-3xl overflow-hidden bg-zinc-950 border border-[var(--border)] aspect-square flex items-center justify-center">
-              <video id="vis-webcam" autoplay playsinline muted class="w-full h-full object-cover hidden"></video>
-              <canvas id="vis-canvas" width="400" height="400" class="w-full h-full object-cover"></canvas>
-              <div class="scan-laser absolute left-5 right-5 h-0.5 bg-[var(--accent)] pointer-events-none"></div>
-              <div class="absolute top-3 left-3 right-3 flex justify-between items-center text-[11px]">
-                <span id="cam-status-pill" class="bg-black/75 text-white px-3 py-1 rounded-full font-semibold">Malha 3D Ativa</span>
+          <div class="lg:col-span-4 space-y-3.5 min-w-0">
+            <div class="relative rounded-3xl overflow-hidden bg-zinc-950 border border-[var(--border)] aspect-square">
+              <video id="vis-webcam" autoplay playsinline muted class="absolute inset-0 w-full h-full object-cover hidden"></video>
+              <canvas id="vis-canvas" width="400" height="400" class="absolute inset-0 w-full h-full object-cover z-10 pointer-events-none"></canvas>
+              <div class="scan-laser absolute left-5 right-5 h-0.5 bg-[var(--accent)] z-20 pointer-events-none"></div>
+              <div class="absolute top-3 left-3 right-3 z-20 flex justify-between items-center text-[11px]">
+                <span id="cam-status-pill" class="bg-black/80 text-white px-3 py-1 rounded-full font-semibold">Malha 3D Ativa</span>
                 <span id="vis-angle-pill" class="bg-[var(--accent)] text-white px-3 py-1 rounded-full font-mono-ln font-bold">118° Maxilar</span>
+              </div>
+              <!-- Barra de Progresso do Escaneamento Biométrico -->
+              <div id="vis-scan-overlay" class="hidden absolute bottom-3 left-3 right-3 z-20 bg-black/85 backdrop-blur-md p-3 rounded-2xl border border-[#d96b43]/50 space-y-1.5">
+                <div class="flex items-center justify-between text-[11px] font-mono-ln text-white">
+                  <span id="vis-scan-step">Mapeando Arestas...</span>
+                  <strong id="vis-scan-pct" class="text-[var(--accent)]">0%</strong>
+                </div>
+                <div class="w-full bg-white/15 h-1.5 rounded-full overflow-hidden">
+                  <div id="vis-scan-bar" class="bg-[var(--accent)] h-full transition-all duration-150" style="width: 0%"></div>
+                </div>
               </div>
             </div>
 
+            <input type="file" id="vis-photo-input" accept="image/*" capture="user" class="hidden" onchange="handleVisagismPhoto(event)" />
+
             <div class="grid grid-cols-2 gap-2">
-              <button onclick="openCameraVisagism()" class="btn-ln-primary py-3 px-2.5 rounded-2xl text-xs font-bold">
-                📷 Escanear Rosto
+              <button onclick="openCameraVisagism()" class="btn-ln-primary py-3 px-2.5 rounded-2xl text-xs font-bold flex items-center justify-center gap-1.5">
+                <span>📷 Escanear Rosto</span>
               </button>
-              <button onclick="cycleShape()" class="btn-ln-ghost py-3 px-2.5 rounded-2xl text-xs font-bold">
-                🔄 Testar Formato
+              <button onclick="document.getElementById('vis-photo-input').click()" class="btn-ln-ghost py-3 px-2.5 rounded-2xl text-xs font-bold flex items-center justify-center gap-1.5">
+                <span>📸 Tirar Selfie / Foto</span>
               </button>
             </div>
 

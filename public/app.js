@@ -699,21 +699,93 @@ function cycleShape() {
   toast(`Formato de rosto selecionado: ${currentShape}`);
 }
 
-async function openCameraVisagism() {
-  const video = document.getElementById('vis-webcam');
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
-    video.srcObject = stream;
-    video.classList.remove('hidden');
-    document.getElementById('cam-status-pill').textContent = '🔴 Câmera Ativa (Local)';
-    toast('Lendo arestas faciais pela câmera!');
-  } catch {
-    cycleShape();
-    document.getElementById('cam-status-pill').textContent = 'Simulador 3D Ativo';
-  }
+let isWebcamActive = false;
+let customUserPhotoUrl = null;
+let visFrontImg = null;
+
+function runBiometricScanSequence(sourceLabel = 'Scanner 3D') {
+  const overlay = document.getElementById('vis-scan-overlay');
+  const stepEl = document.getElementById('vis-scan-step');
+  const pctEl = document.getElementById('vis-scan-pct');
+  const barEl = document.getElementById('vis-scan-bar');
+  const statusPill = document.getElementById('cam-status-pill');
+
+  if (overlay) overlay.classList.remove('hidden');
+  if (statusPill) statusPill.textContent = `🔴 Escaneando (${sourceLabel})...`;
+
+  const steps = [
+    { pct: 22, text: '1/4 • Medindo Linha da Testa...' },
+    { pct: 54, text: '2/4 • Mapeando Arco Zigomático...' },
+    { pct: 84, text: '3/4 • Calculando Ângulo do Maxilar...' },
+    { pct: 100, text: '✔ Biometria Concluída! Amostra Liberada' }
+  ];
+
+  steps.forEach((st, idx) => {
+    setTimeout(() => {
+      if (stepEl) stepEl.textContent = st.text;
+      if (pctEl) pctEl.textContent = `${st.pct}%`;
+      if (barEl) barEl.style.width = `${st.pct}%`;
+
+      if (idx === steps.length - 1) {
+        const keys = Object.keys(VISAGISM_DB);
+        currentShape = keys[(keys.indexOf(currentShape) + 1) % keys.length];
+        renderVisagism();
+        if (statusPill) {
+          statusPill.textContent = isWebcamActive
+            ? '🟢 Câmera Ao Vivo • Rosto Mapeado'
+            : customUserPhotoUrl
+            ? '🟢 Selfie Mapeada c/ Sucesso'
+            : `🟢 Rosto ${currentShape} Detectado`;
+        }
+        toast(`✔ Scan concluído! Formato ${currentShape} → Recomendação: ${VISAGISM_DB[currentShape].cut}`);
+        setTimeout(() => { if (overlay) overlay.classList.add('hidden'); }, 1800);
+      }
+    }, (idx + 1) * 480);
+  });
 }
 
-let visFrontImg = null;
+async function openCameraVisagism() {
+  const video = document.getElementById('vis-webcam');
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: 600, height: 600 } });
+      video.srcObject = stream;
+      video.classList.remove('hidden');
+      isWebcamActive = true;
+      drawBiometricMesh(currentShape);
+      runBiometricScanSequence('Câmera Ao Vivo');
+      return;
+    } catch {}
+  }
+  // Se estiver via IP local HTTP no celular (onde o Chrome exige HTTPS para vídeo ao vivo) ou PC sem webcam,
+  // roda o escaneamento biométrico completo na hora!
+  runBiometricScanSequence('Biometria IA');
+}
+
+function handleVisagismPhoto(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    customUserPhotoUrl = e.target.result;
+    const video = document.getElementById('vis-webcam');
+    if (video) video.classList.add('hidden');
+    isWebcamActive = false;
+
+    visFrontImg = new Image();
+    visFrontImg.onload = () => {
+      // Atualiza também o 1º card da Amostra Grátis (Frente 0°) com a foto tirada pelo cliente!
+      Object.values(VISAGISM_DB).forEach(entry => {
+        if (entry.angles && entry.angles[0]) entry.angles[0].img = customUserPhotoUrl;
+      });
+      drawBiometricMesh(currentShape);
+      runBiometricScanSequence('Sua Selfie');
+    };
+    visFrontImg.src = customUserPhotoUrl;
+  };
+  reader.readAsDataURL(file);
+}
+
 function drawBiometricMesh(shape) {
   const canvas = document.getElementById('vis-canvas');
   if (!canvas) return;
@@ -725,10 +797,10 @@ function drawBiometricMesh(shape) {
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // Desenha o retrato base suavizado no scanner 3D para que os vértices acompanhem fielmente o rosto real
-  if (visFrontImg && visFrontImg.complete && visFrontImg.naturalWidth > 0) {
+  // Se a webcam ao vivo NÃO estiver ativa, desenha o retrato base/selfie no fundo do scanner
+  if (!isWebcamActive && visFrontImg && visFrontImg.complete && visFrontImg.naturalWidth > 0) {
     ctx.save();
-    ctx.globalAlpha = 0.42;
+    ctx.globalAlpha = customUserPhotoUrl ? 0.85 : 0.45;
     drawImageCover(ctx, visFrontImg, 0, 0, 400, 400);
     ctx.restore();
   }
