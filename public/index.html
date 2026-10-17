@@ -323,9 +323,44 @@
   <div id="top" class="relative h-[135vh]">
     <section class="sticky top-0 h-screen w-full overflow-hidden flex items-center">
 
-      <!-- PALCO DIREITO SEAMLESS (Sem Quadrado, Sem Texto Em Cima, Sem Esticar, Degradê p/ Esquerda) -->
-      <div class="absolute inset-y-0 right-0 w-full lg:w-[64%] h-full seamless-right-stage pointer-events-none select-none">
-        <canvas id="hero-seamless-canvas" class="w-full h-full block"></canvas>
+      <!-- PALCO DIREITO SEAMLESS: CÂMERA DO AMBIENTE ESTILO FILMA EU (Ao Vivo no Salão) -->
+      <div class="absolute inset-y-0 right-0 w-full lg:w-[64%] h-full seamless-right-stage overflow-hidden select-none">
+        <video id="hero-ambient-video" autoplay loop muted playsinline preload="auto" class="w-full h-full object-cover object-center transition-opacity duration-500">
+          <source src="/assets/filma-eu-cam1.mp4" type="video/mp4">
+        </video>
+
+        <!-- Gradiente escuro para legibilidade editorial + profundidade -->
+        <div class="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-black/40 pointer-events-none"></div>
+
+        <!-- HUD FILMA EU • CÂMERA DO SALÃO AO VIVO -->
+        <div class="absolute top-20 sm:top-24 right-4 sm:right-8 z-20 pointer-events-auto flex flex-col items-end gap-2 text-white">
+          <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-black/60 backdrop-blur-md border border-white/10 text-[10px] sm:text-xs font-mono-ln shadow-lg">
+            <span class="w-2.5 h-2.5 rounded-full bg-red-600 animate-ping shrink-0"></span>
+            <span class="font-bold tracking-wider uppercase text-red-400">REC</span>
+            <span class="opacity-40">•</span>
+            <span id="filma-cam-label" class="font-bold">CAM 01 [CADEIRA 01]</span>
+          </div>
+
+          <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-black/50 backdrop-blur-sm text-[9px] sm:text-[10px] font-mono-ln opacity-85">
+            <span id="filma-live-clock">17/10/2026 --:--:--</span>
+            <span class="opacity-40">•</span>
+            <span>HD 60FPS</span>
+          </div>
+
+          <!-- Switcher Rápido de Câmeras do Salão (Estilo Filma Eu) -->
+          <div class="flex items-center gap-1.5 pt-0.5">
+            <button onclick="switchFilmaCam(1)" id="btn-cam-1" class="px-2.5 py-1 rounded-lg text-[9px] sm:text-[10px] font-mono-ln font-bold bg-[#d96b43] text-white shadow transition">CAM 1: Cadeira</button>
+            <button onclick="switchFilmaCam(2)" id="btn-cam-2" class="px-2.5 py-1 rounded-lg text-[9px] sm:text-[10px] font-mono-ln font-bold bg-black/60 text-white/70 hover:text-white border border-white/10 transition">CAM 2: Fade</button>
+            <button onclick="switchFilmaCam(3)" id="btn-cam-3" class="px-2.5 py-1 rounded-lg text-[9px] sm:text-[10px] font-mono-ln font-bold bg-black/60 text-white/70 hover:text-white border border-white/10 transition">CAM 3: Salão</button>
+          </div>
+        </div>
+
+        <!-- Indicador de Circuito Interno / Filma Eu no Canto Inferior Direito -->
+        <div class="absolute bottom-6 right-6 z-20 hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-black/60 backdrop-blur-md border border-white/10 text-[10px] font-mono-ln text-white/80">
+          <span>📹 CIRCUITO INTERNO • FILMA EU</span>
+          <span class="opacity-40">•</span>
+          <span class="text-emerald-400 font-bold">BARBEARIA CALIFÓRNIA</span>
+        </div>
       </div>
 
       <!-- Linhas Topográficas Vetoriais Finas (Assinatura Visual Lando Norris) -->

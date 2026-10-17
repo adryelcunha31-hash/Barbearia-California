@@ -127,7 +127,9 @@ const MIME = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
-  '.svg': 'image/svg+xml'
+  '.svg': 'image/svg+xml',
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm'
 };
 
 const ASAAS_API_KEY = process.env.ASAAS_API_KEY || '';
@@ -991,7 +993,33 @@ const server = http.createServer((req, res) => {
     res.writeHead(404);
     return res.end('Página não encontrada');
   }
-  res.writeHead(200, { 'Content-Type': MIME[path.extname(filePath)] || 'text/plain' });
+
+  const ext = path.extname(filePath).toLowerCase();
+  const contentType = MIME[ext] || 'text/plain';
+  const stat = fs.statSync(filePath);
+
+  // Streaming de Vídeo com suporte a HTTP Range (Safari, iOS, Android e Chrome)
+  if ((ext === '.mp4' || ext === '.webm') && req.headers.range) {
+    const range = req.headers.range;
+    const parts = range.replace(/bytes=/, '').split('-');
+    const start = parseInt(parts[0], 10);
+    const end = parts[1] ? parseInt(parts[1], 10) : stat.size - 1;
+    const chunksize = (end - start) + 1;
+    const fileStream = fs.createReadStream(filePath, { start, end });
+    res.writeHead(206, {
+      'Content-Range': `bytes ${start}-${end}/${stat.size}`,
+      'Accept-Ranges': 'bytes',
+      'Content-Length': chunksize,
+      'Content-Type': contentType
+    });
+    return fileStream.pipe(res);
+  }
+
+  res.writeHead(200, {
+    'Content-Type': contentType,
+    'Content-Length': stat.size,
+    'Accept-Ranges': 'bytes'
+  });
   fs.createReadStream(filePath).pipe(res);
 });
 

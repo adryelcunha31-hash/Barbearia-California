@@ -3,18 +3,60 @@ let currentMemberId = localStorage.getItem('cal_member_id') || 'avulso';
 let currentShape = 'Quadrado';
 let pendingCheckoutAction = null;
 
-// ================= LENIS SMOOTH SCROLL + HERO TIMELAPSE CANVAS =================
-const tlImages = [];
-const TL_SOURCES = [
-  '/assets/timelapse-1.png',
-  '/assets/timelapse-2.png',
-  '/assets/timelapse-3.png',
-  '/assets/timelapse-4.png'
-];
-let targetProgress = 0;
-let smoothProgress = 0;
-let mouseX = 0;
-let mouseY = 0;
+// ================= CIRCUITO FILMA EU • CÂMERA DO SALÃO AO VIVO =================
+const FILMA_CAMS = {
+  1: { src: '/assets/filma-eu-cam1.mp4', label: 'CAM 01 [CADEIRA 01]' },
+  2: { src: '/assets/filma-eu-cam2.mp4', label: 'CAM 02 [CORTE & NAVALHA]' },
+  3: { src: '/assets/filma-eu-cam3.mp4', label: 'CAM 03 [SALÃO & ESPERA]' }
+};
+let currentFilmaCam = 1;
+
+function switchFilmaCam(camNum) {
+  const cam = FILMA_CAMS[camNum];
+  if (!cam) return;
+  currentFilmaCam = camNum;
+
+  const vid = document.getElementById('hero-ambient-video');
+  const label = document.getElementById('filma-cam-label');
+  if (vid) {
+    vid.style.opacity = '0.35';
+    setTimeout(() => {
+      vid.src = cam.src;
+      vid.play().catch(() => {});
+      vid.style.opacity = '1';
+    }, 140);
+  }
+  if (label) label.textContent = cam.label;
+
+  [1, 2, 3].forEach(n => {
+    const btn = document.getElementById(`btn-cam-${n}`);
+    if (btn) {
+      if (n === camNum) {
+        btn.className = 'px-2.5 py-1 rounded-lg text-[9px] sm:text-[10px] font-mono-ln font-bold bg-[#d96b43] text-white shadow transition';
+      } else {
+        btn.className = 'px-2.5 py-1 rounded-lg text-[9px] sm:text-[10px] font-mono-ln font-bold bg-black/60 text-white/70 hover:text-white border border-white/10 transition';
+      }
+    }
+  });
+}
+
+function initFilmaEuClock() {
+  const clockEl = document.getElementById('filma-live-clock');
+  function tick() {
+    const now = new Date();
+    const dd = String(now.getDate()).padStart(2, '0');
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const yyyy = now.getFullYear();
+    const hh = String(now.getHours()).padStart(2, '0');
+    const min = String(now.getMinutes()).padStart(2, '0');
+    const ss = String(now.getSeconds()).padStart(2, '0');
+    if (clockEl) {
+      clockEl.textContent = `${dd}/${mm}/${yyyy} ${hh}:${min}:${ss}`;
+    }
+  }
+  tick();
+  setInterval(tick, 1000);
+}
 
 function initLenisAndScroll() {
   if (window.Lenis) {
@@ -25,98 +67,6 @@ function initLenisAndScroll() {
     }
     requestAnimationFrame(raf);
   }
-
-  window.addEventListener('scroll', () => {
-    const maxScroll = Math.max(220, window.innerHeight * 0.35);
-    targetProgress = Math.min(1, Math.max(0, window.scrollY / maxScroll));
-  }, { passive: true });
-
-  window.addEventListener('mousemove', (e) => {
-    mouseX = (e.clientX / window.innerWidth - 0.5) * 18;
-    mouseY = (e.clientY / window.innerHeight - 0.5) * 12;
-  }, { passive: true });
-}
-
-function preloadHeroFrames() {
-  TL_SOURCES.forEach((src, i) => {
-    const img = new Image();
-    img.src = src;
-    tlImages[i] = img;
-  });
-}
-
-function drawImageCover(ctx, img, x, y, w, h, offsetX = 0, offsetY = 0) {
-  if (!img || !img.complete || img.naturalWidth === 0) return;
-  const imgRatio = img.naturalWidth / img.naturalHeight;
-  const canvasRatio = w / h;
-  let drawW, drawH, drawX, drawY;
-
-  if (canvasRatio > imgRatio) {
-    drawW = w;
-    drawH = w / imgRatio;
-    drawX = x;
-    drawY = y + (h - drawH) * 0.35;
-  } else {
-    drawH = h;
-    drawW = h * imgRatio;
-    drawX = x + (w - drawW) * 0.55;
-    drawY = y;
-  }
-  ctx.drawImage(img, drawX + offsetX, drawY + offsetY, drawW, drawH);
-}
-
-function renderSeamlessHeroCanvas() {
-  smoothProgress += (targetProgress - smoothProgress) * 0.12;
-
-  const canvas = document.getElementById('hero-seamless-canvas');
-  if (canvas) {
-    const rect = canvas.getBoundingClientRect();
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    if (canvas.width !== Math.floor(rect.width * dpr) || canvas.height !== Math.floor(rect.height * dpr)) {
-      canvas.width = Math.floor(rect.width * dpr);
-      canvas.height = Math.floor(rect.height * dpr);
-    }
-
-    const ctx = canvas.getContext('2d');
-    const w = canvas.width;
-    const h = canvas.height;
-    ctx.clearRect(0, 0, w, h);
-
-    const stageFloat = smoothProgress * 3;
-    const idxA = Math.min(3, Math.floor(stageFloat));
-    const idxB = Math.min(3, idxA + 1);
-    const alpha = stageFloat - idxA;
-
-    const scale = 1.02 + smoothProgress * 0.04;
-    ctx.save();
-    ctx.translate(w / 2, h / 2);
-    ctx.scale(scale, scale);
-    ctx.translate(-w / 2, -h / 2);
-
-    ctx.globalAlpha = 1;
-    drawImageCover(ctx, tlImages[idxA], 0, 0, w, h, mouseX, mouseY);
-
-    if (alpha > 0.005) {
-      ctx.globalAlpha = alpha;
-      drawImageCover(ctx, tlImages[idxB], 0, 0, w, h, mouseX, mouseY);
-    }
-    ctx.restore();
-    ctx.globalAlpha = 1;
-
-    const cx = w * 0.52 + mouseX;
-    const cy = h * 0.42 + mouseY;
-    const radius = Math.min(w, h) * 0.28;
-
-    ctx.strokeStyle = 'rgba(217, 107, 67, 0.32)';
-    ctx.lineWidth = 1.5 * dpr;
-    ctx.setLineDash([6 * dpr, 6 * dpr]);
-    ctx.beginPath();
-    ctx.ellipse(cx, cy, radius, radius * 1.22, smoothProgress * 0.25, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.setLineDash([]);
-  }
-
-  requestAnimationFrame(renderSeamlessHeroCanvas);
 }
 
 // ================= BANCO DE VISAGISMO (3 PERSPECTIVAS DE REFERÊNCIA DO CORTE) =================
@@ -606,9 +556,8 @@ async function api(url, body) {
 
 async function init() {
   initTheme();
-  preloadHeroFrames();
+  initFilmaEuClock();
   initLenisAndScroll();
-  requestAnimationFrame(renderSeamlessHeroCanvas);
   initMediaPipeFaceLandmarker();
   const res = await api('/api/state');
   updateState(res);
