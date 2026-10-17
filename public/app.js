@@ -232,7 +232,9 @@ function getActiveMember() {
 
 function handleAccountButtonClick() {
   const m = getActiveMember();
-  if (m) {
+  const isPaidActive = Boolean(m && (m.status === 'active' || m.status === 'rescheduled'));
+  if (isPaidActive) {
+    renderVipArea();
     const vipSection = document.getElementById('vip-area-section');
     if (vipSection) {
       vipSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -240,6 +242,7 @@ function handleAccountButtonClick() {
       return;
     }
   }
+  toast('🔒 Área exclusiva para assinantes! Faça login na sua conta ativa para acessar.');
   openLoginModal('login');
 }
 
@@ -1708,6 +1711,12 @@ function getAvailableMonthDays() {
 }
 
 function selectInspectDay(dayLabel) {
+  const m = getActiveMember();
+  if (!m || (m.status !== 'active' && m.status !== 'rescheduled')) {
+    toast('🔒 Área exclusiva para assinantes! Faça login na sua conta ativa para ver os horários.');
+    openLoginModal('login');
+    return;
+  }
   activeInspectDay = dayLabel;
   renderVipArea();
 }
@@ -1814,10 +1823,23 @@ async function orderStoreItem(itemName, basePrice) {
 }
 
 function renderVipArea() {
+  const vipSection = document.getElementById('vip-area-section');
   const calGrid = document.getElementById('vip-calendar-grid');
   const timesGrid = document.getElementById('vip-times-grid');
   const activeDayTitle = document.getElementById('vip-active-day-title');
   const storeGrid = document.getElementById('vip-store-grid');
+
+  const m = getActiveMember();
+  const isPaidActive = Boolean(m && (m.status === 'active' || m.status === 'rescheduled'));
+
+  if (vipSection) {
+    vipSection.classList.toggle('hidden', !isPaidActive);
+  }
+  if (!isPaidActive) {
+    if (calGrid) calGrid.innerHTML = '';
+    if (timesGrid) timesGrid.innerHTML = '';
+    return;
+  }
   if (!calGrid || !storeGrid) return;
 
   const availDays = getAvailableMonthDays();
@@ -1825,8 +1847,6 @@ function renderVipArea() {
     activeInspectDay = availDays[0]?.label || 'Sáb 17/10';
   }
 
-  const m = getActiveMember();
-  const isPaidActive = Boolean(m && (m.status === 'active' || m.status === 'rescheduled'));
   const isGold = Boolean(isPaidActive && m.plan.includes('Gold'));
   const isClub = Boolean(isPaidActive && m.plan.includes('Club'));
   const maxDays = m ? (m.cutsLimit || (m.plan.includes('Gold') ? 4 : 2)) : 4;

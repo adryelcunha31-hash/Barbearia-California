@@ -296,7 +296,7 @@
         <a href="#top" class="px-3.5 py-1.5 rounded-xl hover:opacity-70 transition">Início</a>
         <a href="#fila-section" class="px-3.5 py-1.5 rounded-xl hover:opacity-70 transition">Fila Ao Vivo</a>
         <a href="#visagismo-section" class="px-3.5 py-1.5 rounded-xl hover:opacity-70 transition">Visagismo 3D</a>
-        <a href="#vip-area-section" class="px-3.5 py-1.5 rounded-xl text-[var(--accent)] hover:opacity-80 transition">👑 Área VIP & Bar</a>
+        <button onclick="handleAccountButtonClick()" class="px-3.5 py-1.5 rounded-xl text-[var(--accent)] hover:opacity-80 transition font-bold">👑 Área VIP & Bar</button>
         <a href="#clube-section" class="px-3.5 py-1.5 rounded-xl hover:opacity-70 transition">Planos</a>
         <a href="#avaliacoes-section" class="px-3.5 py-1.5 rounded-xl hover:opacity-70 transition">Avaliações</a>
       </nav>
@@ -566,7 +566,7 @@
     </section>
 
     <!-- ================= 3.5 ÁREA EXCLUSIVA DO ASSINANTE: MEUS DIAS DO MÊS + BAR & PRODUTOS VIP ================= -->
-    <section id="vip-area-section" class="space-y-5 sm:space-y-6 scroll-mt-24">
+    <section id="vip-area-section" class="hidden space-y-5 sm:space-y-6 scroll-mt-24">
       <div class="card-ln rounded-3xl p-4 sm:p-8 space-y-6 border-2 border-[#d96b43]/50">
         <div class="flex flex-wrap items-center justify-between gap-3 pb-4 sm:pb-5 border-b border-[var(--border)]">
           <div class="min-w-0">
@@ -693,7 +693,7 @@
     <a href="#top" class="flex flex-col items-center gap-0.5 py-1 text-[var(--accent)]"><span>🎬</span><span>Início</span></a>
     <a href="#fila-section" class="flex flex-col items-center gap-0.5 py-1 opacity-80"><span>✂</span><span>Fila</span></a>
     <a href="#visagismo-section" class="flex flex-col items-center gap-0.5 py-1 opacity-80"><span>🧠</span><span>Visagismo</span></a>
-    <a href="#vip-area-section" class="flex flex-col items-center gap-0.5 py-1 text-[var(--accent)]"><span>👑</span><span>Área VIP</span></a>
+    <button onclick="handleAccountButtonClick()" class="flex flex-col items-center gap-0.5 py-1 text-[var(--accent)]"><span>👑</span><span>Área VIP</span></button>
     <button onclick="handleAccountButtonClick()" class="flex flex-col items-center gap-0.5 py-1 opacity-80"><span>👤</span><span>Conta</span></button>
   </nav>
 
