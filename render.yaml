@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: barbearia-california
+    runtime: node
+    plan: free
+    buildCommand: echo "Zero build dependencies"
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: ADMIN_PIN
+        value: "2026"
+      - key: ASAAS_BASE_URL
+        value: https://api.asaas.com/v3
+      - key: ASAAS_WEBHOOK_TOKEN
+        value: whsec_california_barbearia_2026_mt99
+      - key: ASAAS_API_KEY
+        sync: false

@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Barbearia Califórnia — São José do Rio Claro, MT</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@500;600;700&family=Syne:wght@700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Mesma Stack Oficial do landonorris.com: Lenis Smooth Scroll + GSAP ScrollTrigger -->
+  <script src="https://unpkg.com/lenis@1.1.20/dist/lenis.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+
+  <style>
+    :root[data-theme="dark"] {
+      --bg: #090a0c;
+      --bg-rgb: 9, 10, 12;
+      --surface: #121418;
+      --surface-2: #191c22;
+      --text: #f4f4f0;
+      --muted: #8e929c;
+      --border: rgba(255, 255, 255, 0.08);
+      --accent: #d96b43;
+      --accent-soft: rgba(217, 107, 67, 0.14);
+      --contour: rgba(255, 255, 255, 0.035);
+    }
+    :root[data-theme="light"] {
+      --bg: #f3f1ec;
+      --bg-rgb: 243, 241, 236;
+      --surface: #ffffff;
+      --surface-2: #e8e4dc;
+      --text: #111210;
+      --muted: #5c5e58;
+      --border: rgba(17, 18, 16, 0.09);
+      --accent: #c45128;
+      --accent-soft: rgba(196, 81, 40, 0.11);
+      --contour: rgba(17, 18, 16, 0.04);
+    }
+
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      margin: 0; padding: 0; width: 100%; max-width: 100%; overflow-x: hidden;
+      background-color: var(--bg); color: var(--text);
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      transition: background-color 0.35s ease, color 0.35s ease;
+    }
+    body::-webkit-scrollbar { display: none; }
+    html { scrollbar-width: none; }
+    main, section, .card-ln, .subtle-ln, .grid > * { min-width: 0; max-width: 100%; }
+
+    .font-display-ln {
+      font-family: 'Syne', sans-serif;
+      letter-spacing: -0.04em;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    .font-serif-ln { font-family: 'Instrument Serif', serif; }
+    .font-mono-ln { font-family: 'JetBrains Mono', monospace; }
+
+    /* Linhas Topográficas Estilo Lando Norris */
+    .topo-bg {
+      background-image: radial-gradient(var(--contour) 1px, transparent 1px);
+      background-size: 32px 32px;
+    }
+
+    /* Máscara de Degradê Contínuo Direita -> Esquerda sem Caixa/Borda (Semelhante ao WebGL Canvas do Lando) */
+    .seamless-right-stage {
+      -webkit-mask-image:
+        linear-gradient(to right, transparent 0%, rgba(0,0,0,0.35) 18%, rgba(0,0,0,0.92) 45%, #000 100%),
+        linear-gradient(to bottom, #000 0%, #000 82%, transparent 100%);
+      -webkit-mask-composite: source-in;
+      mask-image:
+        linear-gradient(to right, transparent 0%, rgba(0,0,0,0.35) 18%, rgba(0,0,0,0.92) 45%, #000 100%),
+        linear-gradient(to bottom, #000 0%, #000 82%, transparent 100%);
+      mask-composite: intersect;
+    }
+    @media (max-width: 1023px) {
+      .seamless-right-stage {
+        -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.65) 60%, transparent 100%);
+        mask-image: linear-gradient(to bottom, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.65) 60%, transparent 100%);
+      }
+    }
+
+    .card-ln {
+      background-color: var(--surface);
+      border: 1px solid var(--border);
+    }
+    .subtle-ln {
+      background-color: var(--surface-2);
+      border: 1px solid var(--border);
+    }
+    .btn-ln-primary {
+      background-color: var(--accent);
+      color: #fff;
+      transition: transform 0.25s cubic-bezier(0.65, 0.05, 0, 1), filter 0.25s ease;
+    }
+    .btn-ln-primary:hover { transform: translateY(-2px); filter: brightness(1.08); }
+    .btn-ln-ghost {
+      background-color: color-mix(in srgb, var(--surface) 82%, transparent);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      color: var(--text);
+      transition: all 0.25s ease;
+    }
+    .btn-ln-ghost:hover { border-color: var(--accent); }
+
+    @keyframes marqueeLeft { to { transform: translateX(-50%); } }
+    .marquee-track { display: flex; width: max-content; animation: marqueeLeft 26s linear infinite; }
+    @keyframes scanPulse { 0%, 100% { top: 10%; opacity: 0.85; } 50% { top: 86%; opacity: 0.35; } }
+    .scan-laser { animation: scanPulse 3s ease-in-out infinite; }
+  </style>
+</head>
+<body class="topo-bg pb-20 lg:pb-12">
+
+  <!-- MODAL 1: LOGIN & CADASTRO DO CLIENTE (COM CPF P/ ASAAS) -->
+  <div id="client-login-modal" class="hidden fixed inset-0 z-[90] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="w-full max-w-md card-ln rounded-3xl p-6 sm:p-7 space-y-4 max-h-[92vh] overflow-y-auto">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-xl btn-ln-primary flex items-center justify-center font-serif-ln italic font-bold text-xl">C</div>
+          <div>
+            <h3 class="font-extrabold text-base">Portal do Assinante</h3>
+            <p class="text-[11px] opacity-70">Barbearia Califórnia • Sessão Criptografada</p>
+          </div>
+        </div>
+        <button onclick="closeLoginModal()" class="w-8 h-8 rounded-full subtle-ln font-bold text-xs">✕</button>
+      </div>
+
+      <!-- Abas Entrar vs Criar Conta -->
+      <div class="grid grid-cols-2 gap-1.5 p-1 rounded-2xl subtle-ln text-xs font-bold">
+        <button id="tab-btn-login" onclick="switchAuthTab('login')" class="py-2 rounded-xl btn-ln-primary transition">Já Sou Cliente</button>
+        <button id="tab-btn-register" onclick="switchAuthTab('register')" class="py-2 rounded-xl opacity-75 hover:opacity-100 transition">Criar Minha Conta</button>
+      </div>
+
+      <!-- Formulário de Login -->
+      <div id="auth-form-login" class="space-y-3">
+        <div>
+          <label class="text-xs font-bold opacity-80 block mb-1">Seu WhatsApp (com DDD)</label>
+          <input id="login-phone" type="tel" value="65999112233" placeholder="Ex: 65999112233" class="w-full subtle-ln rounded-xl px-3.5 py-2.5 text-sm font-mono-ln focus:outline-none" />
+        </div>
+        <div>
+          <label class="text-xs font-bold opacity-80 block mb-1">PIN de Acesso (4 dígitos)</label>
+          <input id="login-pin" type="password" maxlength="6" value="1234" placeholder="••••" class="w-full subtle-ln rounded-xl px-3.5 py-2.5 text-sm font-mono-ln focus:outline-none" />
+        </div>
+        <button onclick="submitClientLogin()" class="w-full btn-ln-primary py-3 rounded-xl text-xs sm:text-sm font-bold">
+          Entrar na Minha Conta
+        </button>
+      </div>
+
+      <!-- Formulário de Novo Cadastro (Integrado ao Asaas) -->
+      <div id="auth-form-register" class="hidden space-y-2.5">
+        <div>
+          <label class="text-xs font-bold opacity-80 block mb-1">Nome Completo</label>
+          <input id="reg-name" type="text" placeholder="Ex: João Pedro Silva" class="w-full subtle-ln rounded-xl px-3.5 py-2 text-sm focus:outline-none" />
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="text-xs font-bold opacity-80 block mb-1">CPF (Obrigatório Asaas)</label>
+            <input id="reg-cpf" type="text" maxlength="14" placeholder="000.000.000-00" class="w-full subtle-ln rounded-xl px-3 py-2 text-xs font-mono-ln focus:outline-none" />
+          </div>
+          <div>
+            <label class="text-xs font-bold opacity-80 block mb-1">WhatsApp (DDD)</label>
+            <input id="reg-phone" type="tel" maxlength="15" placeholder="65999001122" class="w-full subtle-ln rounded-xl px-3 py-2 text-xs font-mono-ln focus:outline-none" />
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="text-xs font-bold opacity-80 block mb-1">Criar PIN (4 dígitos)</label>
+            <input id="reg-pin" type="password" maxlength="4" placeholder="1234" class="w-full subtle-ln rounded-xl px-3 py-2 text-xs font-mono-ln focus:outline-none" />
+          </div>
+          <div>
+            <label class="text-xs font-bold opacity-80 block mb-1">Plano Inicial</label>
+            <select id="reg-plan" class="w-full subtle-ln rounded-xl px-2.5 py-2 text-xs font-bold focus:outline-none bg-transparent">
+              <option value="gold" class="bg-zinc-900 text-white">👑 Gold VIP 4x (R$ 109,90)</option>
+              <option value="club" class="bg-zinc-900 text-white">✂ Club 2x (R$ 69,90)</option>
+            </select>
+          </div>
+        </div>
+        <button onclick="submitClientRegister()" class="w-full btn-ln-primary py-3 rounded-xl text-xs sm:text-sm font-bold">
+          Criar Conta & Ir para Pagamento →
+        </button>
+      </div>
+
+      <div class="pt-3 border-t border-[var(--border)] space-y-2">
+        <span class="text-[10px] font-bold uppercase tracking-wider opacity-65 block">Alternar Perfil Rápido (Para Apresentação):</span>
+        <div id="demo-accounts-list" class="space-y-1.5"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 2: CHECKOUT ASAAS (CARTÃO DE CRÉDITO RECORRENTE & PIX AUTOMÁTICO) -->
+  <div id="checkout-modal" class="hidden fixed inset-0 z-[95] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="w-full max-w-md card-ln rounded-3xl p-6 sm:p-7 space-y-4 max-h-[92vh] overflow-y-auto">
+      <div class="flex items-center justify-between">
+        <div>
+          <span class="text-[10px] font-bold uppercase tracking-widest text-[var(--accent)]">Asaas Pagamentos • Ambiente Criptografado</span>
+          <h3 id="chk-title" class="font-extrabold text-lg mt-0.5">Assinatura Recorrente</h3>
+        </div>
+        <button onclick="closeCheckoutModal()" class="w-8 h-8 rounded-full subtle-ln font-bold text-xs">✕</button>
+      </div>
+
+      <div class="subtle-ln rounded-2xl p-3.5 flex items-center justify-between">
+        <div>
+          <span id="chk-desc" class="text-xs opacity-75 block">Barbearia Califórnia • Cobrança Mensal</span>
+          <strong id="chk-amount" class="font-mono-ln text-2xl font-extrabold text-[var(--accent)]">R$ 109,90</strong>
+        </div>
+        <span class="text-[10px] px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-500 font-bold">Webhook Automático</span>
+      </div>
+
+      <!-- Seletor de Método: PIX Automático vs Cartão Recorrente -->
+      <div class="grid grid-cols-2 gap-1.5 p-1 rounded-2xl subtle-ln text-xs font-bold">
+        <button id="pay-tab-pix" onclick="switchPaymentMethod('PIX_AUTOMATICO')" class="py-2.5 rounded-xl btn-ln-primary transition">💠 PIX Automático</button>
+        <button id="pay-tab-card" onclick="switchPaymentMethod('CREDIT_CARD')" class="py-2.5 rounded-xl opacity-75 hover:opacity-100 transition">💳 Cartão Recorrente</button>
+      </div>
+
+      <!-- ABA 1: PIX AUTOMÁTICO / QR CODE DINÂMICO ASAAS -->
+      <div id="pay-panel-pix" class="subtle-ln rounded-2xl p-4 text-center space-y-3">
+        <div class="flex items-center justify-between text-[11px] px-1">
+          <span class="font-bold text-emerald-500">✔ PIX Automático Banco Central / Asaas</span>
+          <span class="opacity-70 font-mono-ln">Baixa em 2 seg</span>
+        </div>
+        <div class="w-32 h-32 mx-auto bg-white p-2.5 rounded-2xl flex items-center justify-center">
+          <svg viewBox="0 0 100 100" class="w-full h-full text-black" fill="currentColor">
+            <rect x="8" y="8" width="26" height="26" fill="none" stroke="currentColor" stroke-width="6"/>
+            <rect x="15" y="15" width="12" height="12"/>
+            <rect x="66" y="8" width="26" height="26" fill="none" stroke="currentColor" stroke-width="6"/>
+            <rect x="73" y="15" width="12" height="12"/>
+            <rect x="8" y="66" width="26" height="26" fill="none" stroke="currentColor" stroke-width="6"/>
+            <rect x="15" y="73" width="12" height="12"/>
+            <rect x="42" y="12" width="8" height="8"/><rect x="42" y="28" width="8" height="16"/>
+            <rect x="14" y="44" width="18" height="8"/><rect x="42" y="48" width="16" height="16"/>
+            <rect x="66" y="44" width="10" height="18"/><rect x="82" y="52" width="10" height="14"/>
+            <rect x="44" y="72" width="14" height="8"/><rect x="66" y="72" width="24" height="10"/>
+          </svg>
+        </div>
+        <p class="text-[11px] opacity-80 leading-relaxed">
+          Ao pagar o 1º PIX, o <strong>Asaas ativa sua assinatura mensal</strong> e envia o alerta automático no WhatsApp todo mês com baixa instantânea.
+        </p>
+        <div class="flex gap-2">
+          <input id="pix-payload-input" readonly value="00020126580014BR.GOV.BCB.PIX0114ASAASCALIFORNI520400005303986" class="flex-1 bg-black/20 rounded-xl px-3 py-2 text-[11px] font-mono-ln truncate" />
+          <button onclick="navigator.clipboard?.writeText(document.getElementById('pix-payload-input').value); toast('Código PIX Copia e Cola copiado!')" class="btn-ln-ghost px-3 py-2 rounded-xl text-xs font-bold shrink-0">Copiar</button>
+        </div>
+      </div>
+
+      <!-- ABA 2: CARTÃO DE CRÉDITO RECORRENTE (NÃO OCUPA LIMITE ANUAL) -->
+      <div id="pay-panel-card" class="hidden subtle-ln rounded-2xl p-4 space-y-2.5">
+        <div class="flex items-center justify-between text-[11px]">
+          <span class="font-bold text-[var(--accent)]">✔ Cobrança Mensal (Não trava o limite)</span>
+          <span class="opacity-70 font-mono-ln">Tokenização Asaas</span>
+        </div>
+        <div>
+          <label class="text-[11px] font-bold opacity-75 block mb-1">Número do Cartão de Crédito</label>
+          <input id="cc-number" type="text" maxlength="19" value="5489 4410 8821 9044" class="w-full card-ln rounded-xl px-3 py-2 text-xs font-mono-ln focus:outline-none" />
+        </div>
+        <div>
+          <label class="text-[11px] font-bold opacity-75 block mb-1">Nome Impresso no Cartão</label>
+          <input id="cc-holder" type="text" value="CARLOS E SILVA" class="w-full card-ln rounded-xl px-3 py-2 text-xs uppercase focus:outline-none" />
+        </div>
+        <div class="grid grid-cols-3 gap-2">
+          <div>
+            <label class="text-[11px] font-bold opacity-75 block mb-1">Validade</label>
+            <input id="cc-exp" type="text" maxlength="5" value="09/29" class="w-full card-ln rounded-xl px-3 py-2 text-xs font-mono-ln focus:outline-none" />
+          </div>
+          <div>
+            <label class="text-[11px] font-bold opacity-75 block mb-1">CVV</label>
+            <input id="cc-cvv" type="password" maxlength="4" value="842" class="w-full card-ln rounded-xl px-3 py-2 text-xs font-mono-ln focus:outline-none" />
+          </div>
+          <div>
+            <label class="text-[11px] font-bold opacity-75 block mb-1">CPF Titular</label>
+            <input id="cc-cpf" type="text" maxlength="14" value="048.991.221-09" class="w-full card-ln rounded-xl px-2.5 py-2 text-[11px] font-mono-ln focus:outline-none" />
+          </div>
+        </div>
+      </div>
+
+      <button onclick="confirmCheckoutPayment()" id="btn-confirm-checkout" class="w-full btn-ln-primary py-3.5 rounded-2xl text-xs sm:text-sm font-bold">
+        Confirmar Assinatura Agora
+      </button>
+    </div>
+  </div>
+
+  <!-- MODAL 3: SIMULADOR 9:16 REAL -->
+  <div id="mobile-916-overlay" class="hidden fixed inset-0 z-[100] bg-black/85 backdrop-blur-md flex flex-col items-center justify-center p-4">
+    <div class="flex items-center justify-between w-full max-w-[375px] mb-3 text-white text-xs">
+      <span class="font-bold">📱 Proporção 9:16 Real (Mobile Viewport)</span>
+      <button onclick="close916Simulator()" class="px-3 py-1.5 rounded-full bg-white/15 hover:bg-white/25 font-bold">✕ Fechar</button>
+    </div>
+    <div class="relative w-[369px] h-[656px] rounded-[42px] border-[10px] border-zinc-800 shadow-2xl overflow-hidden bg-black">
+      <iframe id="mobile-916-iframe" src="about:blank" class="w-full h-full border-0"></iframe>
+    </div>
+  </div>
+
+  <!-- FLOATING HEADER ESTILO LANDO NORRIS (100% Responsivo Mobile & Desktop) -->
+  <header class="fixed top-0 left-0 right-0 z-50 px-3 sm:px-8 py-3 pointer-events-none overflow-hidden">
+    <div class="max-w-[1440px] mx-auto flex items-center justify-between gap-2">
+      <!-- Brand Pill -->
+      <a href="#top" class="pointer-events-auto btn-ln-ghost px-2.5 sm:px-3.5 py-2 rounded-2xl flex items-center gap-2 sm:gap-3 min-w-0">
+        <div class="w-7 h-7 sm:w-8 sm:h-8 rounded-xl btn-ln-primary flex items-center justify-center font-serif-ln italic text-lg sm:text-xl font-bold shrink-0">C</div>
+        <div class="leading-none min-w-0">
+          <span class="font-extrabold text-[11px] sm:text-sm tracking-tight block truncate">BARBEARIA CALIFÓRNIA</span>
+          <span class="hidden sm:block text-[10px] opacity-65 mt-0.5 truncate">São José do Rio Claro • ★ 5.0</span>
+        </div>
+      </a>
+
+      <!-- Center Floating Nav Pill -->
+      <nav class="hidden lg:flex pointer-events-auto btn-ln-ghost p-1.5 rounded-2xl items-center gap-1 text-xs font-bold whitespace-nowrap">
+        <a href="#top" class="px-3.5 py-1.5 rounded-xl hover:opacity-70 transition">Início</a>
+        <a href="#fila-section" class="px-3.5 py-1.5 rounded-xl hover:opacity-70 transition">Fila Ao Vivo</a>
+        <a href="#visagismo-section" class="px-3.5 py-1.5 rounded-xl hover:opacity-70 transition">Visagismo 3D</a>
+        <a href="#clube-section" class="px-3.5 py-1.5 rounded-xl hover:opacity-70 transition">Clube Anual</a>
+        <a href="#avaliacoes-section" class="px-3.5 py-1.5 rounded-xl hover:opacity-70 transition">Avaliações</a>
+      </nav>
+
+      <!-- Right Action Pills -->
+      <div class="pointer-events-auto flex items-center gap-1.5 sm:gap-2 shrink-0">
+        <button onclick="toggleTheme()" class="btn-ln-ghost px-2.5 sm:px-3 py-2 rounded-2xl text-xs font-bold flex items-center gap-1">
+          <span id="theme-icon">☀️</span>
+          <span id="theme-label" class="hidden sm:inline">Claro</span>
+        </button>
+
+        <button onclick="open916Simulator()" id="btn-916" class="hidden xl:inline-flex btn-ln-ghost px-3 py-2 rounded-2xl text-xs font-bold">
+          📱 9:16
+        </button>
+
+        <button onclick="openLoginModal()" class="btn-ln-ghost px-2.5 sm:px-3.5 py-2 rounded-2xl text-[11px] sm:text-xs font-bold flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-[#d96b43] shrink-0"></span>
+          <span id="nav-user-name" class="truncate max-w-[72px] sm:max-w-none">Marcos V.</span>
+        </button>
+
+        <a href="/admin" target="_top" class="btn-ln-primary px-2.5 sm:px-4 py-2 rounded-2xl text-[11px] sm:text-xs font-bold">
+          Admin
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Toast -->
+  <div id="toast" class="hidden fixed bottom-20 lg:bottom-6 left-4 right-4 sm:left-auto sm:right-5 z-50 card-ln border-l-4 border-l-[#d96b43] px-4 py-3.5 rounded-2xl shadow-2xl text-xs sm:text-sm font-bold flex items-center justify-between gap-3"></div>
+
+  <!-- ================= 1. HERO FULL-SCREEN SEM CAIXA (ARQUITETURA LANDONORRIS.COM) ================= -->
+  <!-- Pinned/Sticky Scroll Track: 135vh de altura para que o scroll complete rápido e fluido logo no topo -->
+  <div id="top" class="relative h-[135vh]">
+    <section class="sticky top-0 h-screen w-full overflow-hidden flex items-center">
+
+      <!-- PALCO DIREITO SEAMLESS (Sem Quadrado, Sem Texto Em Cima, Sem Esticar, Degradê p/ Esquerda) -->
+      <div class="absolute inset-y-0 right-0 w-full lg:w-[64%] h-full seamless-right-stage pointer-events-none select-none">
+        <canvas id="hero-seamless-canvas" class="w-full h-full block"></canvas>
+      </div>
+
+      <!-- Linhas Topográficas Vetoriais Finas (Assinatura Visual Lando Norris) -->
+      <svg class="absolute inset-0 w-full h-full pointer-events-none opacity-20" viewBox="0 0 1440 900" fill="none">
+        <path id="ln-vector-line" d="M-100,720 C320,680 540,220 980,180 C1220,150 1380,340 1600,280" stroke="var(--accent)" stroke-width="1.5" stroke-dasharray="1800" stroke-dashoffset="0"/>
+      </svg>
+
+      <!-- CONTEÚDO EDITORIAL ESQUERDO (Sobre a cor sólida do tema) -->
+      <div class="relative z-10 max-w-[1440px] w-full mx-auto px-4 sm:px-8 pt-14">
+        <div class="max-w-xl space-y-5 sm:space-y-6">
+
+          <!-- Widget Chanfrado Estilo "Next Race" do Lando Norris -->
+          <div class="inline-flex flex-wrap items-center gap-2 sm:gap-3 px-3.5 py-2 rounded-2xl subtle-ln text-[11px] sm:text-xs font-mono-ln">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping shrink-0"></span>
+            <span class="uppercase tracking-wider font-bold">Ordem de Chegada Ao Vivo</span>
+            <span class="text-[var(--accent)] font-bold" id="hero-queue-count">3 na fila</span>
+          </div>
+
+          <h1 class="font-display-ln text-3xl sm:text-6xl lg:text-[68px] font-extrabold leading-[0.95] tracking-tight uppercase">
+            PRECISÃO <br/>
+            <span class="font-serif-ln italic font-normal lowercase text-[var(--accent)] text-5xl sm:text-7xl lg:text-[82px]">califórnia</span> <br/>
+            EM CADA CORTE.
+          </h1>
+
+          <p class="text-sm sm:text-base opacity-75 leading-relaxed max-w-md">
+            Role suavemente para ver a transição do corte ao vivo. Entre na fila de casa mantendo a ordem de chegada e pague menos por corte no Clube Anual.
+          </p>
+
+          <!-- CTAs Diretos -->
+          <div class="flex flex-wrap items-center gap-3 pt-1">
+            <a href="#fila-section" class="btn-ln-primary px-6 py-4 rounded-2xl text-xs sm:text-sm font-bold flex items-center gap-2.5 shadow-xl">
+              <span>Entrar na Fila Agora</span>
+              <span>→</span>
+            </a>
+            <a href="#visagismo-section" class="btn-ln-ghost px-5 py-4 rounded-2xl text-xs sm:text-sm font-bold">
+              Visagismo IA 3D
+            </a>
+          </div>
+
+          <!-- Indicador Minimalista de Preço (Sem Estágio Scroll) -->
+          <div class="pt-4 flex items-center gap-6 text-xs font-mono-ln opacity-75">
+            <div>
+              <span class="block text-[10px] uppercase opacity-60">Corte Avulso</span>
+              <strong class="text-sm">R$ 40,00</strong>
+            </div>
+            <div class="h-6 w-px bg-[var(--border)]"></div>
+            <div>
+              <span class="block text-[10px] uppercase opacity-60">No Clube VIP</span>
+              <strong class="text-sm text-[var(--accent)]">R$ 27,47 / corte</strong>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </section>
+  </div>
+
+  <!-- FAIXA MARQUEE INFINITA (Estilo Lando Norris) -->
+  <div class="border-y border-[var(--border)] py-3.5 overflow-hidden subtle-ln select-none">
+    <div class="marquee-track flex items-center gap-10 text-xs font-mono-ln font-bold uppercase tracking-widest opacity-80">
+      <span>★ BARBEARIA CALIFÓRNIA — SÃO JOSÉ DO RIO CLARO, MT</span>
+      <span class="text-[var(--accent)]">● ORDEM DE CHEGADA INTELIGENTE</span>
+      <span>★ VISAGISMO IA EM 3 PERSPECTIVAS</span>
+      <span class="text-[var(--accent)]">● CLUBE ANUAL A PARTIR DE R$ 27,47 POR CORTE</span>
+      <span>★ AV. MATO GROSSO, CENTRO (NOTA 5.0 GOOGLE)</span>
+      <span>★ BARBEARIA CALIFÓRNIA — SÃO JOSÉ DO RIO CLARO, MT</span>
+      <span class="text-[var(--accent)]">● ORDEM DE CHEGADA INTELIGENTE</span>
+      <span>★ VISAGISMO IA EM 3 PERSPECTIVAS</span>
+      <span class="text-[var(--accent)]">● CLUBE ANUAL A PARTIR DE R$ 27,47 POR CORTE</span>
+    </div>
+  </div>
+
+  <!-- CONTEÚDO PRINCIPAL ABAIXO DO HERO -->
+  <main class="max-w-[1380px] w-full mx-auto px-3.5 sm:px-8 pt-12 sm:pt-14 space-y-16 sm:space-y-20 overflow-x-hidden">
+
+    <!-- ================= 2. FILA AO VIVO POR ORDEM DE CHEGADA & PASSE DO CLIENTE ================= -->
+    <section id="fila-section" class="space-y-5 sm:space-y-6 scroll-mt-24">
+      <!-- Alerta de Atraso 3 Dias (Fica aqui na seção da Fila/Conta, sem poluir o Hero!) -->
+      <div id="overdue-banner" class="hidden card-ln rounded-3xl p-4 sm:p-6 border-2 border-[#d96b43]"></div>
+
+      <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
+        <div class="min-w-0">
+          <span class="text-[11px] sm:text-xs font-mono-ln font-bold uppercase tracking-widest text-[var(--accent)]">01 / Ordem de Chegada Ao Vivo</span>
+          <h2 class="font-display-ln text-xl sm:text-4xl font-extrabold uppercase mt-1 leading-tight">Fila da Cadeira & Meu Passe</h2>
+        </div>
+        <button onclick="openLoginModal()" class="btn-ln-ghost px-4 py-2.5 rounded-xl text-xs font-bold self-start sm:self-auto">
+          👤 Trocar Conta de Cliente (Demo)
+        </button>
+      </div>
+
+      <div class="grid lg:grid-cols-12 gap-5 sm:gap-6 items-start">
+        <!-- Cartão do Assinante (5 Colunas) -->
+        <div class="lg:col-span-5 card-ln rounded-3xl p-4 sm:p-6 space-y-4 sm:space-y-5 min-w-0">
+          <div class="flex items-center justify-between gap-3">
+            <div class="min-w-0">
+              <span class="text-[10px] font-mono-ln font-bold uppercase tracking-widest text-[var(--accent)] block">California Member Pass</span>
+              <h3 id="card-member-name" class="font-extrabold text-lg sm:text-xl mt-0.5 truncate">Marcos Vinícius</h3>
+            </div>
+            <div id="card-member-avatar" class="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl subtle-ln font-mono-ln font-bold flex items-center justify-center text-sm text-[var(--accent)] shrink-0">
+              MV
+            </div>
+          </div>
+
+          <div class="subtle-ln rounded-2xl p-3.5 sm:p-4 space-y-3">
+            <div class="flex items-center justify-between gap-2 text-xs">
+              <span class="opacity-70">Assinatura</span>
+              <strong id="card-member-plan" class="text-right truncate">Califórnia Club (2 Cortes/mês)</strong>
+            </div>
+            <div class="flex items-center justify-between gap-2 text-xs">
+              <span class="opacity-70">Cortes Disponíveis</span>
+              <strong id="card-member-cuts" class="font-mono-ln text-[var(--accent)]">1 de 2 restantes</strong>
+            </div>
+            <div class="w-full bg-black/20 h-2 rounded-full overflow-hidden">
+              <div id="card-member-bar" class="bg-[var(--accent)] h-full rounded-full transition-all duration-500" style="width: 50%"></div>
+            </div>
+          </div>
+
+          <div class="subtle-ln rounded-2xl p-3.5 sm:p-4 flex items-center justify-between gap-3">
+            <div class="min-w-0">
+              <span class="text-[10px] font-mono-ln font-bold uppercase tracking-wider opacity-65 block">Corte Recomendado (Visagismo IA)</span>
+              <strong id="card-member-cut" class="text-xs sm:text-sm truncate block mt-0.5">High Fade + Quiff Estruturado</strong>
+            </div>
+            <a href="#visagismo-section" class="btn-ln-ghost px-3 py-2 rounded-xl text-xs font-bold shrink-0">3 Ângulos</a>
+          </div>
+
+          <div class="flex items-center justify-between pt-2 border-t border-[var(--border)] text-xs gap-2">
+            <span class="opacity-70 font-mono-ln" id="card-member-due">Vencimento: 14/10/2026</span>
+            <span id="card-member-status" class="px-3 py-1 rounded-full font-bold text-[11px] shrink-0">Status</span>
+          </div>
+        </div>
+
+        <!-- Fila de Ordem de Chegada Interativa (7 Colunas) -->
+        <div class="lg:col-span-7 card-ln rounded-3xl p-4 sm:p-6 space-y-4 sm:space-y-5 min-w-0">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="min-w-0">
+              <span class="text-xs font-bold text-emerald-500 flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping shrink-0"></span>
+                <span class="truncate">Tempo Real • Av. Mato Grosso, Centro</span>
+              </span>
+              <h3 class="font-extrabold text-lg sm:text-xl mt-0.5">Ordem de Chegada na Cadeira</h3>
+            </div>
+            <div class="subtle-ln px-3.5 py-2 rounded-2xl text-right shrink-0">
+              <span class="text-[10px] uppercase font-mono-ln font-bold opacity-65 block">Espera Estimada</span>
+              <strong id="queue-est-label" class="font-mono-ln text-sm sm:text-lg text-[var(--accent)]">~36 min</strong>
+            </div>
+          </div>
+
+          <div id="live-queue-container" class="space-y-2.5"></div>
+
+          <div class="grid sm:grid-cols-2 gap-2.5 sm:gap-3 pt-1">
+            <button onclick="handleJoinQueue()" class="w-full btn-ln-primary py-3.5 px-3 rounded-2xl text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 text-center">
+              <span>⚡ Entrar na Fila Agora</span>
+            </button>
+            <button onclick="handleRelocateDay()" class="w-full btn-ln-ghost py-3.5 px-3 rounded-2xl text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 text-center">
+              <span>📅 Imprevisto? Relocar Dia c/ Aviso</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= 3. ESTÚDIO DE VISAGISMO IA (AMOSTRA GRÁTIS VS OFICIAL GOLD VIP) ================= -->
+    <section id="visagismo-section" class="space-y-5 sm:space-y-6 scroll-mt-24">
+      <div class="card-ln rounded-3xl p-4 sm:p-8 space-y-5 sm:space-y-6">
+        <div class="flex flex-wrap items-center justify-between gap-3 pb-4 sm:pb-5 border-b border-[var(--border)]">
+          <div class="min-w-0">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="text-[11px] sm:text-xs font-mono-ln font-bold uppercase tracking-widest text-[var(--accent)]">02 / Biometria Facial Local (LGPD)</span>
+              <span id="vis-access-badge" class="text-[10px] sm:text-[11px] font-bold px-2.5 py-0.5 rounded-full subtle-ln text-[var(--accent)]">🔒 Modo Amostra (1 de 3 Ângulos)</span>
+            </div>
+            <h2 class="font-display-ln text-lg sm:text-4xl font-extrabold uppercase mt-1 leading-tight">Visagismo IA em 3 Perspectivas</h2>
+          </div>
+          <button id="btn-vis-action" onclick="saveVisagismChoice()" class="w-full sm:w-auto btn-ln-primary px-4 py-3 rounded-2xl text-xs sm:text-sm font-bold text-center">
+            Salvar Corte na Minha Ficha
+          </button>
+        </div>
+
+        <div class="grid lg:grid-cols-12 gap-5 sm:gap-6 items-start">
+          <div class="lg:col-span-4 space-y-4 min-w-0">
+            <div class="relative rounded-3xl overflow-hidden bg-zinc-950 border border-[var(--border)] aspect-square flex items-center justify-center">
+              <video id="vis-webcam" autoplay playsinline muted class="w-full h-full object-cover hidden"></video>
+              <canvas id="vis-canvas" width="400" height="400" class="w-full h-full object-cover"></canvas>
+              <div class="scan-laser absolute left-5 right-5 h-0.5 bg-[var(--accent)] pointer-events-none"></div>
+              <div class="absolute top-3 left-3 right-3 flex justify-between items-center text-[11px]">
+                <span id="cam-status-pill" class="bg-black/75 text-white px-3 py-1 rounded-full font-semibold">Malha 3D Ativa</span>
+                <span id="vis-angle-pill" class="bg-[var(--accent)] text-white px-3 py-1 rounded-full font-mono-ln font-bold">118° Maxilar</span>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+              <button onclick="openCameraVisagism()" class="btn-ln-primary py-3 px-2.5 rounded-2xl text-xs font-bold">
+                📷 Escanear Rosto
+              </button>
+              <button onclick="cycleShape()" class="btn-ln-ghost py-3 px-2.5 rounded-2xl text-xs font-bold">
+                🔄 Testar Formato
+              </button>
+            </div>
+
+            <div id="shape-buttons-grid" class="grid grid-cols-4 gap-1.5"></div>
+          </div>
+
+          <div class="lg:col-span-8 space-y-5 min-w-0">
+            <div class="subtle-ln rounded-2xl p-4 sm:p-5 space-y-2.5">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <span class="text-xs font-bold uppercase tracking-wider text-emerald-500">✔ Recomendação Visagista das Arestas</span>
+                <span id="vis-harmony-badge" class="font-mono-ln text-xs font-bold text-[var(--accent)]">98.8% Compatibilidade</span>
+              </div>
+              <h3 id="vis-recommended-cut" class="text-lg sm:text-2xl font-extrabold">Mid Fade + Crop Texturizado</h3>
+              <p id="vis-recommended-desc" class="text-xs sm:text-sm opacity-80 leading-relaxed"></p>
+              <div id="vis-recommended-tags" class="flex flex-wrap gap-2 pt-1 text-xs"></div>
+            </div>
+
+            <div id="vis-3-angles-grid" class="grid sm:grid-cols-3 gap-4"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= 4. CLUBE ANUAL DE ASSINATURA ================= -->
+    <section id="clube-section" class="space-y-5 sm:space-y-6 scroll-mt-24">
+      <div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div class="min-w-0">
+          <span class="text-[11px] sm:text-xs font-mono-ln font-bold uppercase tracking-widest text-[var(--accent)]">03 / Fidelidade 12 Meses • Pagamento Mensal</span>
+          <h2 class="font-display-ln text-xl sm:text-4xl font-extrabold uppercase mt-1 leading-tight">Clube de Assinatura Califórnia</h2>
+        </div>
+
+        <div class="card-ln rounded-2xl p-3.5 flex items-center justify-between gap-3">
+          <div class="text-xs min-w-0">
+            <span class="opacity-70 block">Simulador de Economia:</span>
+            <strong id="calc-summary" class="text-[var(--accent)] block truncate">4 cortes/mês = Economize R$ 601/ano</strong>
+          </div>
+          <div class="flex gap-1 shrink-0">
+            <button onclick="setCalcCuts(2)" id="calc-2" class="px-3 py-1.5 rounded-xl text-xs font-bold subtle-ln">2x</button>
+            <button onclick="setCalcCuts(4)" id="calc-4" class="px-3 py-1.5 rounded-xl text-xs font-bold btn-ln-primary">4x</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="plans-cards-grid" class="grid md:grid-cols-3 gap-5"></div>
+    </section>
+
+    <!-- ================= 5. AVALIAÇÕES REAIS GOOGLE MAPS ================= -->
+    <section id="avaliacoes-section" class="space-y-5 sm:space-y-6 scroll-mt-24 pb-8">
+      <div class="flex flex-wrap items-center justify-between gap-4">
+        <div class="min-w-0">
+          <span class="text-[11px] sm:text-xs font-mono-ln font-bold uppercase tracking-widest text-[var(--accent)]">04 / Reputação 5.0 Estrelas em São José do Rio Claro</span>
+          <h2 class="font-display-ln text-xl sm:text-4xl font-extrabold uppercase mt-1 leading-tight">Avaliações Verificadas</h2>
+        </div>
+        <a href="https://www.google.com.br/maps/place/BARBEARIA+CALIFORNIA/@-13.4463024,-56.7259668,17z" target="_blank" class="btn-ln-ghost px-4 py-2.5 rounded-xl text-xs font-bold">
+          📍 Abrir no Google Maps ↗
+        </a>
+      </div>
+
+      <div id="reviews-grid" class="grid md:grid-cols-3 gap-5"></div>
+    </section>
+
+  </main>
+
+  <!-- BARRA MOBILE -->
+  <nav class="lg:hidden fixed bottom-0 left-0 right-0 z-40 card-ln border-t border-[var(--border)] px-2 py-2 flex justify-around items-center text-[11px] font-bold">
+    <a href="#top" class="flex flex-col items-center gap-0.5 py-1 text-[var(--accent)]"><span>🎬</span><span>Início</span></a>
+    <a href="#fila-section" class="flex flex-col items-center gap-0.5 py-1 opacity-80"><span>✂</span><span>Fila</span></a>
+    <a href="#visagismo-section" class="flex flex-col items-center gap-0.5 py-1 opacity-80"><span>🧠</span><span>Visagismo</span></a>
+    <button onclick="openLoginModal()" class="flex flex-col items-center gap-0.5 py-1 opacity-80"><span>👤</span><span>Conta</span></button>
+  </nav>
+
+  <script src="/app.js"></script>
+</body>
+</html>

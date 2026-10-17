@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Painel Barbeiro, Financeiro & CRM | Barbearia Califórnia</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root[data-theme="light"] {
+      --bg-main: #f5f3ef;
+      --bg-elevated: #ffffff;
+      --bg-subtle: #ebe7df;
+      --text-main: #141413;
+      --border-color: rgba(20, 20, 19, 0.1);
+      --accent: #c85a32;
+      --accent-soft: rgba(200, 90, 50, 0.1);
+      --shadow-card: 0 18px 40px -15px rgba(20, 20, 19, 0.07);
+    }
+    :root[data-theme="dark"] {
+      --bg-main: #0b0c0e;
+      --bg-elevated: #13151a;
+      --bg-subtle: #1b1e26;
+      --text-main: #f5f4f0;
+      --border-color: rgba(255, 255, 255, 0.09);
+      --accent: #e06d44;
+      --accent-soft: rgba(224, 109, 68, 0.14);
+      --shadow-card: 0 22px 50px -18px rgba(0, 0, 0, 0.75);
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0; width: 100%; max-width: 100vw; overflow-x: hidden;
+      background-color: var(--bg-main); color: var(--text-main);
+      font-family: 'Plus Jakarta Sans', sans-serif;
+    }
+    .font-serif-ed { font-family: 'Instrument Serif', serif; }
+    .font-mono-num { font-family: 'JetBrains Mono', monospace; }
+    .surface-card { background-color: var(--bg-elevated); border: 1px solid var(--border-color); box-shadow: var(--shadow-card); }
+    .surface-subtle { background-color: var(--bg-subtle); border: 1px solid var(--border-color); }
+    .btn-accent { background-color: var(--accent); color: #fff; transition: 0.2s; }
+    .btn-accent:hover { opacity: 0.92; transform: translateY(-1px); }
+    .btn-outline { background-color: var(--bg-elevated); color: var(--text-main); border: 1px solid var(--border-color); }
+    .accent-badge { background-color: var(--accent-soft); color: var(--accent); border: 1px solid rgba(200, 90, 50, 0.25); }
+  </style>
+</head>
+<body class="min-h-screen antialiased pb-12">
+
+  <!-- TELA DE LOGIN ADMIN BLINDADA (E-MAIL + PIN + ANTI-BRUTE FORCE) -->
+  <div id="admin-lock-screen" class="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="w-full max-w-md surface-card rounded-3xl p-7 space-y-5">
+      <div class="flex items-center gap-3">
+        <div class="w-12 h-12 rounded-2xl btn-accent flex items-center justify-center font-serif-ed italic font-bold text-2xl">C</div>
+        <div>
+          <span class="text-[10px] font-bold uppercase tracking-widest text-[#c85a32] block">Segurança SaaS • Rate-Limit & RLS Ativo</span>
+          <h1 class="font-extrabold text-xl">Login Administrativo</h1>
+          <p class="text-xs opacity-70">Barbearia Califórnia — São José do Rio Claro, MT</p>
+        </div>
+      </div>
+
+      <div class="space-y-3">
+        <div>
+          <label class="text-xs font-bold opacity-80 block mb-1">Credencial do Administrador</label>
+          <input id="admin-user-input" type="email" value="admin@california.com" class="w-full surface-subtle rounded-xl px-3.5 py-2.5 text-sm font-mono-num focus:outline-none" />
+        </div>
+        <div>
+          <label class="text-xs font-bold opacity-80 block mb-1">PIN de Segurança (Padrão: 2026)</label>
+          <input id="admin-pin-input" type="password" value="2026" placeholder="PIN (2026)" class="w-full surface-subtle rounded-xl px-3.5 py-2.5 text-lg font-mono-num tracking-[0.3em] focus:outline-none" />
+        </div>
+        <button onclick="unlockAdmin()" class="w-full btn-accent font-bold py-3.5 rounded-2xl text-xs sm:text-sm shadow-md">
+          🔒 Autenticar e Abrir CRM & Financeiro
+        </button>
+      </div>
+
+      <div class="pt-3 border-t border-[var(--border-color)] flex items-center justify-between text-xs opacity-75">
+        <span>🛡️ Protegido contra Força Bruta</span>
+        <a href="/" class="hover:underline font-bold text-[#c85a32]">← App do Cliente</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="hidden fixed top-6 right-6 z-50 surface-card border-l-4 border-l-[#c85a32] px-4 py-3 rounded-2xl shadow-2xl text-xs font-bold"></div>
+
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+    <!-- Top Header Admin -->
+    <div class="surface-card rounded-3xl p-4 sm:p-5 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl btn-accent flex items-center justify-center font-serif-ed italic font-bold text-xl">C</div>
+        <div>
+          <h1 class="font-extrabold text-base sm:text-xl leading-tight">Gestão, CRM & Financeiro — Barbearia Califórnia</h1>
+          <p class="text-xs opacity-70">Controle de mensalidades, fila por ordem de chegada, livro-caixa PIX e cobrança automática IA</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button onclick="toggleAdminTheme()" class="btn-outline px-3 py-2 rounded-xl text-xs font-bold" id="adm-theme-btn">☀️/🌙 Tema</button>
+        <a href="/" class="btn-accent px-4 py-2 rounded-xl text-xs font-bold">📱 Ver App do Cliente</a>
+      </div>
+    </div>
+
+    <!-- 4 KPIs Financeiros -->
+    <div id="kpi-grid" class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4"></div>
+
+    <!-- Grid Principal: CRM + Cobrança IA & Fila -->
+    <div class="grid lg:grid-cols-12 gap-6 items-start">
+      <!-- Carteira CRM + Livro Caixa Financeiro (7 Colunas) -->
+      <div class="lg:col-span-7 space-y-6">
+        <div class="surface-card rounded-3xl p-5 sm:p-6 space-y-5">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <span class="text-xs uppercase tracking-wider text-[#c85a32] font-bold">Assinantes Anuais</span>
+              <h2 class="font-extrabold text-lg sm:text-xl">Carteira de Clientes & Visagismo</h2>
+            </div>
+            <div class="flex surface-subtle p-1 rounded-xl text-xs font-bold">
+              <button onclick="filterCrm('all')" id="btn-all" class="px-3 py-1.5 rounded-lg btn-accent">Todos</button>
+              <button onclick="filterCrm('overdue')" id="btn-overdue" class="px-3 py-1.5 rounded-lg text-rose-500">Atrasados (3+d)</button>
+              <button onclick="filterCrm('active')" id="btn-active" class="px-3 py-1.5 rounded-lg text-emerald-500">Em Dia</button>
+            </div>
+          </div>
+          <div id="crm-list" class="space-y-3"></div>
+        </div>
+
+        <!-- MÓDULO FINANCEIRO & LIVRO CAIXA (PIX, RECORRÊNCIA, AVULSOS R$ 40 E TAXAS R$ 5) -->
+        <div class="surface-card rounded-3xl p-5 sm:p-6 space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <span class="text-xs uppercase tracking-wider text-emerald-500 font-bold">Fluxo de Caixa & Recebimentos</span>
+              <h2 class="font-extrabold text-lg sm:text-xl">Livro Caixa em Tempo Real (PIX & Recorrência)</h2>
+            </div>
+            <span class="text-xs accent-badge px-3 py-1 rounded-full font-bold">Gateway: Asaas / PIX Automático</span>
+          </div>
+
+          <div id="transactions-list" class="space-y-2"></div>
+        </div>
+      </div>
+
+      <!-- Coluna Direita: Assistente IA de Cobrança + Fila da Cadeira (5 Colunas) -->
+      <div class="lg:col-span-5 space-y-6">
+        <div class="surface-card rounded-3xl p-5 sm:p-6 space-y-4 border-2 border-[#c85a32]/40">
+          <div class="flex items-center justify-between">
+            <div>
+              <span class="text-[10px] font-bold uppercase tracking-widest text-[#c85a32]">Recuperação Sem Clima Chato</span>
+              <h3 class="font-extrabold text-lg">🤖 Cobrança Amigável com IA</h3>
+            </div>
+            <span class="font-mono-num text-xs font-bold accent-badge px-3 py-1 rounded-xl">+R$ 5,00 Taxa</span>
+          </div>
+
+          <div class="text-xs surface-subtle px-3.5 py-2.5 rounded-xl flex items-center justify-between">
+            <span class="opacity-75">Cliente em atraso:</span>
+            <strong id="ai-target-name">Marcos Vinícius (3 dias atrasado)</strong>
+          </div>
+
+          <textarea id="ai-msg-textarea" rows="5" class="w-full surface-subtle rounded-2xl p-3.5 text-xs sm:text-sm leading-relaxed focus:outline-none"></textarea>
+
+          <div class="grid grid-cols-2 gap-2.5">
+            <button onclick="dispatchWhatsApp()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 px-4 rounded-2xl text-xs transition">
+              📲 Enviar WhatsApp
+            </button>
+            <button onclick="confirmFeeAgreement()" class="btn-accent font-bold py-3 px-4 rounded-2xl text-xs">
+              ✅ Aceitar Acordo (+R$ 5)
+            </button>
+          </div>
+        </div>
+
+        <div class="surface-card rounded-3xl p-5 sm:p-6 space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="font-extrabold text-lg">💈 Fila da Cadeira (Ao Vivo)</h3>
+            <span id="admin-queue-badge" class="font-mono-num text-xs font-bold text-[#c85a32]">3 na fila</span>
+          </div>
+          <div id="admin-chair-list" class="space-y-2.5"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/admin.js"></script>
+</body>
+</html>
