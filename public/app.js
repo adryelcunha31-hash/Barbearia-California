@@ -1051,26 +1051,27 @@ function renderVisagism() {
 // Malha Biométrica 1:1 nos cards de Referência do Corte (Modelo de Estúdio em 3 Ângulos)
 function getAngleBiometricSVG(type, shape = 'Quadrado') {
   if (type === 'front') {
-    const jawLeft = shape === 'Quadrado' ? '33,68' : shape === 'Redondo' ? '35,67' : shape === 'Diamante' ? '36,68' : '34,68';
-    const jawRight = shape === 'Quadrado' ? '65,68' : shape === 'Redondo' ? '63,67' : shape === 'Diamante' ? '62,68' : '64,68';
-    const cheekLeft = shape === 'Diamante' ? '28,52' : '30,52';
-    const cheekRight = shape === 'Diamante' ? '70,52' : '68,52';
+    // Coordenadas matemáticas exatas do modelo em vis-front.png sob object-cover
+    const jawLeft = shape === 'Quadrado' ? '31.5,66.2' : shape === 'Redondo' ? '33.5,65.5' : shape === 'Diamante' ? '34.5,66.5' : '32.0,66.2';
+    const jawRight = shape === 'Quadrado' ? '68.0,66.2' : shape === 'Redondo' ? '66.0,65.5' : shape === 'Diamante' ? '65.0,66.5' : '67.5,66.2';
+    const cheekLeft = shape === 'Diamante' ? '28.5,53.8' : '29.8,53.8';
+    const cheekRight = shape === 'Diamante' ? '71.0,53.8' : '70.0,53.8';
 
     const pts = [
-      [49, 22], [66, 24], [69, 38], cheekRight.split(',').map(Number),
-      jawRight.split(',').map(Number), [57, 78], [49, 81], [41, 78],
-      jawLeft.split(',').map(Number), cheekLeft.split(',').map(Number), [29, 38], [32, 24]
+      [49.5, 26.2], [66.5, 28.0], [70.2, 42.2], cheekRight.split(',').map(Number),
+      jawRight.split(',').map(Number), [61.5, 75.8], [49.5, 80.5], [38.0, 75.8],
+      jawLeft.split(',').map(Number), cheekLeft.split(',').map(Number), [29.2, 42.2], [32.5, 28.0]
     ];
     const polyStr = pts.map(p => p.join(',')).join(' ');
     const circles = pts.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="1.15" fill="#ffffff" stroke="#d96b43" stroke-width="0.7"/>`).join('');
 
     return `<svg viewBox="0 0 100 100" class="w-full h-full opacity-90">
-      <line x1="49" y1="15" x2="49" y2="85" stroke="#10b981" stroke-width="0.65" stroke-dasharray="2,2" opacity="0.85"/>
-      <line x1="29" y1="38" x2="69" y2="38" stroke="#10b981" stroke-width="0.5" stroke-dasharray="1.5,1.5" opacity="0.65"/>
-      <line x1="${cheekLeft.split(',')[0]}" y1="52" x2="${cheekRight.split(',')[0]}" y2="52" stroke="#d96b43" stroke-width="0.55" stroke-dasharray="2,1.5" opacity="0.75"/>
-      <line x1="${jawLeft.split(',')[0]}" y1="68" x2="${jawRight.split(',')[0]}" y2="68" stroke="#d96b43" stroke-width="0.65" stroke-dasharray="2,1.5" opacity="0.85"/>
-      <polyline points="29,38 49,53 69,38" fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="0.45"/>
-      <polyline points="${jawLeft} 49,63 ${jawRight}" fill="none" stroke="rgba(217,107,67,0.45)" stroke-width="0.5"/>
+      <line x1="49.5" y1="20" x2="49.5" y2="84" stroke="#10b981" stroke-width="0.65" stroke-dasharray="2,2" opacity="0.85"/>
+      <line x1="29.2" y1="42.2" x2="70.2" y2="42.2" stroke="#10b981" stroke-width="0.5" stroke-dasharray="1.5,1.5" opacity="0.65"/>
+      <line x1="${cheekLeft.split(',')[0]}" y1="53.8" x2="${cheekRight.split(',')[0]}" y2="53.8" stroke="#d96b43" stroke-width="0.55" stroke-dasharray="2,1.5" opacity="0.75"/>
+      <line x1="${jawLeft.split(',')[0]}" y1="66.2" x2="${jawRight.split(',')[0]}" y2="66.2" stroke="#d96b43" stroke-width="0.65" stroke-dasharray="2,1.5" opacity="0.85"/>
+      <polyline points="29.2,42.2 49.5,57.5 70.2,42.2" fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="0.45"/>
+      <polyline points="${jawLeft} 49.5,67.5 ${jawRight}" fill="none" stroke="rgba(217,107,67,0.45)" stroke-width="0.5"/>
       <polygon points="${polyStr}" fill="rgba(217,107,67,0.06)" stroke="#d96b43" stroke-width="0.95" stroke-dasharray="2.5,1.5"/>
       ${circles}
     </svg>`;
@@ -1122,8 +1123,8 @@ function runBiometricScanSequence(sourceLabel = 'Scanner 3D', targetImage = null
     { pct: 100, text: '✔ Biometria Facial Concluída!' }
   ];
 
-  // Executa a detecção real nos pixels / landmarks da foto ou vídeo
-  const analysisPromise = analyzeImageFaceBiometrics(targetImage || visFrontImg);
+  // Executa a detecção real apenas quando há uma foto/selfie capturada pelo usuário
+  const analysisPromise = targetImage ? analyzeImageFaceBiometrics(targetImage) : Promise.resolve(null);
 
   steps.forEach((st, idx) => {
     setTimeout(async () => {
@@ -1158,7 +1159,6 @@ async function openCameraVisagism() {
       video.srcObject = stream;
       video.classList.remove('hidden');
       isWebcamActive = true;
-      // Captura um frame nítido da webcam após 600ms para detectar os pontos reais do rosto
       setTimeout(() => {
         const snap = document.createElement('canvas');
         snap.width = video.videoWidth || 600;
@@ -1178,7 +1178,6 @@ async function openCameraVisagism() {
       return;
     } catch {}
   }
-  // Em IP local HTTP no celular (onde getUserMedia é bloqueado pelo navegador), abre a câmera de selfie nativa se ainda não tirou foto!
   if (!customUserPhotoUrl) {
     document.getElementById('vis-photo-input')?.click();
     return;
@@ -1199,7 +1198,7 @@ function handleVisagismPhoto(event) {
     const img = new Image();
     img.onload = async () => {
       visFrontImg = img;
-      // Analisa imediatamente para já posicionar a foto no tamanho ideal sem zoom exagerado!
+      if (!mpFaceLandmarker) await initMediaPipeFaceLandmarker();
       detectedFaceData = await analyzeImageFaceBiometrics(img);
       drawBiometricMesh(currentShape);
       runBiometricScanSequence('Sua Selfie', img);
@@ -1215,19 +1214,16 @@ function drawBiometricMesh(shape) {
   if (!visFrontImg) {
     visFrontImg = new Image();
     visFrontImg.src = '/assets/vis-front.png';
-    visFrontImg.onload = async () => {
-      detectedFaceData = await analyzeImageFaceBiometrics(visFrontImg);
-      drawBiometricMesh(currentShape);
-    };
+    // Na imagem padrão do modelo de estúdio, desenha 100% full-bleed com as coordenadas calibradas do modelo!
+    visFrontImg.onload = () => drawBiometricMesh(currentShape);
   }
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, 400, 400);
 
-  // 1. Desenha a foto com Enquadramento Inteligente (Sem Zoom exagerado e sem cortar queixo/cabelo!)
+  // 1. Desenha a foto: Modelo padrão preenche 400x400 sem bordas internas; Selfie do cliente usa Enquadramento Inteligente
   if (!isWebcamActive && visFrontImg && visFrontImg.complete && visFrontImg.naturalWidth > 0) {
     ctx.save();
-    if (detectedFaceData && detectedFaceData.framing) {
-      // Fundo ambient blur escuro de estúdio para preencher bordas caso a selfie seja muito próxima
+    if (customUserPhotoUrl && detectedFaceData && detectedFaceData.framing) {
       ctx.save();
       ctx.filter = 'blur(18px) brightness(0.32)';
       drawImageCover(ctx, visFrontImg, -20, -20, 440, 440);
@@ -1237,14 +1233,13 @@ function drawBiometricMesh(shape) {
       ctx.globalAlpha = 0.94;
       ctx.drawImage(visFrontImg, drawX, drawY, drawW, drawH);
 
-      // Vinheta suave nas bordas para integrar ao scanner 3D
       const grad = ctx.createRadialGradient(200, 205, 115, 200, 200, 220);
       grad.addColorStop(0, 'rgba(9,10,12,0)');
       grad.addColorStop(1, 'rgba(9,10,12,0.65)');
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, 400, 400);
     } else {
-      ctx.globalAlpha = 0.65;
+      ctx.globalAlpha = 0.72;
       drawImageCover(ctx, visFrontImg, 0, 0, 400, 400);
     }
     ctx.restore();
@@ -1255,17 +1250,22 @@ function drawBiometricMesh(shape) {
   ctx.lineWidth = 1;
   [95, 145, 185].forEach(r => { ctx.beginPath(); ctx.arc(200, 205, r, 0, Math.PI * 2); ctx.stroke(); });
 
-  // 2. Usa os vértices anatômicos REAIS detectados no rosto da foto!
-  const pts = (detectedFaceData && detectedFaceData.contourCanvas)
+  // 2. Coordenadas: Se o usuário tirou selfie, usa os vértices reais detectados; se for o modelo padrão, usa o contorno exato calibrado em 400x400!
+  const pts = (customUserPhotoUrl && detectedFaceData && detectedFaceData.contourCanvas)
     ? detectedFaceData.contourCanvas
-    : [[196, 88], [260, 96], [274, 152], [270, 208], [256, 270], [226, 310], [196, 322], [166, 310], [136, 270], [122, 208], [118, 152], [132, 96]];
+    : shape === 'Quadrado'
+    ? [[198, 105], [266, 112], [281, 169], [280, 215], [272, 265], [246, 303], [198, 322], [152, 303], [127, 265], [119, 215], [117, 169], [130, 113]]
+    : shape === 'Redondo'
+    ? [[198, 106], [262, 114], [280, 170], [282, 216], [266, 264], [242, 301], [198, 319], [156, 301], [132, 264], [117, 216], [118, 170], [134, 114]]
+    : shape === 'Diamante'
+    ? [[198, 105], [258, 114], [278, 169], [284, 215], [262, 266], [240, 304], [198, 324], [158, 304], [136, 266], [114, 215], [120, 169], [138, 114]]
+    : [[198, 105], [264, 112], [280, 169], [279, 215], [268, 265], [244, 303], [198, 322], [154, 303], [130, 265], [120, 215], [118, 169], [132, 113]];
 
-  // 3. Desenha as linhas internas reais de reconhecimento facial (Olhos, Sobrancelhas, Eixo Nasal, Boca e Réguas de Largura)
-  if (detectedFaceData && detectedFaceData.features) {
+  // 3. Desenha as linhas internas de simetria e feições
+  if (customUserPhotoUrl && detectedFaceData && detectedFaceData.features) {
     const f = detectedFaceData.features;
     const tel = detectedFaceData.telemetry;
 
-    // Eixo vertical de simetria (Testa -> Glabela -> Ponta do Nariz -> Queixo)
     ctx.strokeStyle = 'rgba(16, 185, 129, 0.72)';
     ctx.lineWidth = 1.3;
     ctx.setLineDash([4, 3]);
@@ -1273,8 +1273,7 @@ function drawBiometricMesh(shape) {
     f.noseAxis.forEach(([x, y], i) => i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y));
     ctx.stroke();
 
-    // Réguas horizontais medidas: Testa, Zigomático e Maxilar
-    ctx.strokeStyle = 'rgba(16, 185, 129, 0.55)';
+    ctx.strokeStyle = 'rgba(16, 185, 129, 0.50)';
     ctx.beginPath();
     ctx.moveTo(f.foreheadLine[0][0], f.foreheadLine[0][1]);
     ctx.lineTo(f.foreheadLine[1][0], f.foreheadLine[1][1]);
@@ -1285,7 +1284,6 @@ function drawBiometricMesh(shape) {
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // Malha ocular, sobrancelhas e linha labial (prova visual de que o rosto foi reconhecido!)
     ctx.strokeStyle = 'rgba(16, 185, 129, 0.85)';
     ctx.lineWidth = 1.2;
     [f.leftEye, f.rightEye].forEach(eye => {
@@ -1302,17 +1300,42 @@ function drawBiometricMesh(shape) {
       ctx.stroke();
     });
 
-    // Etiquetas de telemetria medidas diretamente nas linhas do rosto
+    // Barra HUD de telemetria no rodapé do scanner (fora do nariz/boca!)
     if (tel) {
+      ctx.fillStyle = 'rgba(9, 10, 12, 0.82)';
+      ctx.fillRect(42, 360, 316, 24);
+      ctx.strokeStyle = 'rgba(217, 107, 67, 0.45)';
+      ctx.strokeRect(42, 360, 316, 24);
       ctx.font = 'bold 10px "JetBrains Mono", monospace';
-      ctx.fillStyle = 'rgba(0,0,0,0.75)';
-      ctx.fillRect(f.cheekLine[1][0] - 58, f.cheekLine[1][1] - 16, 62, 14);
-      ctx.fillRect(f.jawLine[1][0] - 54, f.jawLine[1][1] - 16, 58, 14);
       ctx.fillStyle = '#10b981';
-      ctx.fillText(`ZIG 100%`, f.cheekLine[1][0] - 54, f.cheekLine[1][1] - 6);
+      ctx.fillText(`TESTA ${tel.foreheadPct}%`, 54, 375);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(`•  ZIG 100%  •`, 152, 375);
       ctx.fillStyle = '#d96b43';
-      ctx.fillText(`MAX ${tel.jawPct}%`, f.jawLine[1][0] - 50, f.jawLine[1][1] - 6);
+      ctx.fillText(`MAXILAR ${tel.jawPct}%`, 262, 375);
     }
+  } else {
+    // Linhas de simetria calibradas para o modelo padrão (Olhos y=188, Zigomático y=215, Maxilar y=265)
+    ctx.strokeStyle = 'rgba(16, 185, 129, 0.60)';
+    ctx.lineWidth = 1.2;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(198, 80); ctx.lineTo(198, 345);
+    ctx.moveTo(117, 169); ctx.lineTo(281, 169);
+    ctx.moveTo(119, 215); ctx.lineTo(280, 215);
+    ctx.moveTo(127, 265); ctx.lineTo(272, 265);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Contorno ocular sutil alinhado aos olhos do modelo padrão
+    ctx.strokeStyle = 'rgba(16, 185, 129, 0.75)';
+    ctx.lineWidth = 1.1;
+    [[[142, 188], [160, 181], [178, 189], [160, 194]], [[218, 188], [238, 180], [258, 187], [238, 193]]].forEach(eye => {
+      ctx.beginPath();
+      eye.forEach(([x, y], i) => i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y));
+      ctx.closePath();
+      ctx.stroke();
+    });
   }
 
   // 4. Desenha o polígono de contorno anatômico cravado na borda real do rosto
