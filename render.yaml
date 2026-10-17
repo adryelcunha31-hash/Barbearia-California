@@ -8,8 +8,10 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: ADMIN_USER
+        value: "Rogério"
       - key: ADMIN_PIN
-        value: "2026"
+        value: "Rogério2026"
       - key: ASAAS_BASE_URL
         value: https://api.asaas.com/v3
       - key: ASAAS_WEBHOOK_TOKEN

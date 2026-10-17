@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Painel Barbeiro, Financeiro & CRM | Barbearia Califórnia</title>
+  <title>Painel Administrativo Restrito | Barbearia Califórnia</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -48,26 +48,26 @@
 </head>
 <body class="min-h-screen antialiased pb-12">
 
-  <!-- TELA DE LOGIN ADMIN BLINDADA (E-MAIL + PIN + ANTI-BRUTE FORCE) -->
-  <div id="admin-lock-screen" class="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+  <!-- TELA DE LOGIN ADMIN BLINDADA -->
+  <div id="admin-lock-screen" class="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
     <div class="w-full max-w-md surface-card rounded-3xl p-7 space-y-5">
       <div class="flex items-center gap-3">
         <div class="w-12 h-12 rounded-2xl btn-accent flex items-center justify-center font-serif-ed italic font-bold text-2xl">C</div>
         <div>
-          <span class="text-[10px] font-bold uppercase tracking-widest text-[#c85a32] block">Segurança SaaS • Rate-Limit & RLS Ativo</span>
-          <h1 class="font-extrabold text-xl">Login Administrativo</h1>
+          <span class="text-[10px] font-bold uppercase tracking-widest text-[#c85a32] block">Acesso Exclusivo do Proprietário</span>
+          <h1 class="font-extrabold text-xl">Painel Administrativo</h1>
           <p class="text-xs opacity-70">Barbearia Califórnia — São José do Rio Claro, MT</p>
         </div>
       </div>
 
       <div class="space-y-3">
         <div>
-          <label class="text-xs font-bold opacity-80 block mb-1">Credencial do Administrador</label>
-          <input id="admin-user-input" type="email" value="admin@california.com" class="w-full surface-subtle rounded-xl px-3.5 py-2.5 text-sm font-mono-num focus:outline-none" />
+          <label class="text-xs font-bold opacity-80 block mb-1">Administrador</label>
+          <input id="admin-user-input" type="text" value="Rogério — Barbearia Califórnia" readonly class="w-full surface-subtle rounded-xl px-3.5 py-2.5 text-sm opacity-80 focus:outline-none" />
         </div>
         <div>
-          <label class="text-xs font-bold opacity-80 block mb-1">PIN de Segurança (Padrão: 2026)</label>
-          <input id="admin-pin-input" type="password" value="2026" placeholder="PIN (2026)" class="w-full surface-subtle rounded-xl px-3.5 py-2.5 text-lg font-mono-num tracking-[0.3em] focus:outline-none" />
+          <label class="text-xs font-bold opacity-80 block mb-1">Senha de Acesso Restrito</label>
+          <input id="admin-pin-input" type="password" value="" placeholder="Digite sua senha de acesso" onkeydown="if(event.key==='Enter') unlockAdmin()" class="w-full surface-subtle rounded-xl px-3.5 py-3 text-base font-mono-num focus:outline-none border border-transparent focus:border-[#c85a32]" />
         </div>
         <button onclick="unlockAdmin()" class="w-full btn-accent font-bold py-3.5 rounded-2xl text-xs sm:text-sm shadow-md">
           🔒 Autenticar e Abrir CRM & Financeiro
@@ -75,8 +75,8 @@
       </div>
 
       <div class="pt-3 border-t border-[var(--border-color)] flex items-center justify-between text-xs opacity-75">
-        <span>🛡️ Protegido contra Força Bruta</span>
-        <a href="/" class="hover:underline font-bold text-[#c85a32]">← App do Cliente</a>
+        <span>🛡️ Criptografia & Rate-Limit Ativo</span>
+        <a href="/" class="hover:underline font-bold text-[#c85a32]">← Ir p/ Site Público</a>
       </div>
     </div>
   </div>
@@ -91,12 +91,13 @@
         <div class="w-10 h-10 rounded-xl btn-accent flex items-center justify-center font-serif-ed italic font-bold text-xl">C</div>
         <div>
           <h1 class="font-extrabold text-base sm:text-xl leading-tight">Gestão, CRM & Financeiro — Barbearia Califórnia</h1>
-          <p class="text-xs opacity-70">Controle de mensalidades, fila por ordem de chegada, livro-caixa PIX e cobrança automática IA</p>
+          <p class="text-xs opacity-70">Controle de assinantes, fila por ordem de chegada, livro-caixa Asaas e cobrança amigável IA</p>
         </div>
       </div>
-      <div class="flex items-center gap-2">
+      <div class="flex flex-wrap items-center gap-2">
         <button onclick="toggleAdminTheme()" class="btn-outline px-3 py-2 rounded-xl text-xs font-bold" id="adm-theme-btn">☀️/🌙 Tema</button>
-        <a href="/" class="btn-accent px-4 py-2 rounded-xl text-xs font-bold">📱 Ver App do Cliente</a>
+        <button onclick="resetDatabaseAdmin()" class="btn-outline px-3 py-2 rounded-xl text-xs font-bold text-rose-500">🗑️ Zerar Banco</button>
+        <a href="/" class="btn-accent px-4 py-2 rounded-xl text-xs font-bold">📱 Ver Site do Cliente</a>
       </div>
     </div>
 
@@ -110,7 +111,7 @@
         <div class="surface-card rounded-3xl p-5 sm:p-6 space-y-5">
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <span class="text-xs uppercase tracking-wider text-[#c85a32] font-bold">Assinantes Anuais</span>
+              <span class="text-xs uppercase tracking-wider text-[#c85a32] font-bold">Assinantes Reais</span>
               <h2 class="font-extrabold text-lg sm:text-xl">Carteira de Clientes & Visagismo</h2>
             </div>
             <div class="flex surface-subtle p-1 rounded-xl text-xs font-bold">
@@ -122,14 +123,14 @@
           <div id="crm-list" class="space-y-3"></div>
         </div>
 
-        <!-- MÓDULO FINANCEIRO & LIVRO CAIXA (PIX, RECORRÊNCIA, AVULSOS R$ 40 E TAXAS R$ 5) -->
+        <!-- MÓDULO FINANCEIRO & LIVRO CAIXA -->
         <div class="surface-card rounded-3xl p-5 sm:p-6 space-y-4">
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
               <span class="text-xs uppercase tracking-wider text-emerald-500 font-bold">Fluxo de Caixa & Recebimentos</span>
               <h2 class="font-extrabold text-lg sm:text-xl">Livro Caixa em Tempo Real (PIX & Recorrência)</h2>
             </div>
-            <span class="text-xs accent-badge px-3 py-1 rounded-full font-bold">Gateway: Asaas / PIX Automático</span>
+            <span class="text-xs accent-badge px-3 py-1 rounded-full font-bold">Gateway: Asaas Oficial</span>
           </div>
 
           <div id="transactions-list" class="space-y-2"></div>
@@ -148,11 +149,11 @@
           </div>
 
           <div class="text-xs surface-subtle px-3.5 py-2.5 rounded-xl flex items-center justify-between">
-            <span class="opacity-75">Cliente em atraso:</span>
-            <strong id="ai-target-name">Marcos Vinícius (3 dias atrasado)</strong>
+            <span class="opacity-75">Cliente selecionado:</span>
+            <strong id="ai-target-name">Nenhum cliente em atraso</strong>
           </div>
 
-          <textarea id="ai-msg-textarea" rows="5" class="w-full surface-subtle rounded-2xl p-3.5 text-xs sm:text-sm leading-relaxed focus:outline-none"></textarea>
+          <textarea id="ai-msg-textarea" rows="5" placeholder="Quando houver algum assinante com pagamento em atraso, a mensagem automática para WhatsApp aparecerá pronta aqui." class="w-full surface-subtle rounded-2xl p-3.5 text-xs sm:text-sm leading-relaxed focus:outline-none"></textarea>
 
           <div class="grid grid-cols-2 gap-2.5">
             <button onclick="dispatchWhatsApp()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 px-4 rounded-2xl text-xs transition">
@@ -167,7 +168,7 @@
         <div class="surface-card rounded-3xl p-5 sm:p-6 space-y-4">
           <div class="flex items-center justify-between">
             <h3 class="font-extrabold text-lg">💈 Fila da Cadeira (Ao Vivo)</h3>
-            <span id="admin-queue-badge" class="font-mono-num text-xs font-bold text-[#c85a32]">3 na fila</span>
+            <span id="admin-queue-badge" class="font-mono-num text-xs font-bold text-[#c85a32]">0 na fila</span>
           </div>
           <div id="admin-chair-list" class="space-y-2.5"></div>
         </div>
