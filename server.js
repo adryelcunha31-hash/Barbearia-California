@@ -178,19 +178,108 @@ async function ensureAsaasCustomer(m, asaasHeaders) {
   return { id: custData.id };
 }
 
-// Blindagem Anti-Vazamento de Dados (LGPD): Remove CPFs, PINs, Telefones e Livro Caixa da rota pública
-function sanitizeDbForRole(db, req) {
-  const bookedSlots = [];
+const CUT_DURATION_MIN = 40;
+const DAILY_SLOTS_40M = [
+  '08:20', '09:00', '09:40', '10:20', '11:00',
+  '13:20', '14:00', '14:40', '15:20', '16:00', '16:40', '17:20', '18:00', '18:40', '19:20'
+];
+
+function getTodayDayLabel() {
+  const weekNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+  const now = new Date();
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  if (d.getDay() === 0) d.setDate(d.getDate() + 1);
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  return `${weekNames[d.getDay()]} ${dd}/${mm}`;
+}
+
+function timeToMinutes(tStr) {
+  const [hh, mm] = String(tStr || '08:20').split(':').map(Number);
+  return (hh || 0) * 60 + (mm || 0);
+}
+
+// Sincroniza a Fila Ao Vivo (40 min por corte) com os Horários Reservados pelos Assinantes Gold VIP & Club
+function recalculateQueueAndSlots(db) {
+  const todayLabel = getTodayDayLabel();
+  db.queue = (db.queue || []).filter(q => q.status !== 'relocated');
+
+  // Mapeia todos os horários reservados para HOJE por assinantes Gold VIP e Club ativos
+  const vipTodayMap = new Map();
   (db.members || []).forEach(m => {
     if (m.status === 'active' || m.status === 'rescheduled') {
       (m.scheduledDays || []).forEach(slot => {
-        bookedSlots.push({ memberId: m.id, slot });
+        if (slot.startsWith(todayLabel + ' às ')) {
+          const timePart = slot.split(' às ')[1]?.trim();
+          if (timePart) {
+            vipTodayMap.set(timePart, {
+              memberId: m.id,
+              name: m.name,
+              plan: m.plan.includes('Gold') ? '👑 Gold VIP' : '✦ Club',
+              service: m.visagism?.cut || 'Corte Assinatura',
+              time: timePart,
+              slot
+            });
+          }
+        }
       });
     }
   });
 
+  // Define o índice inicial de horário do dia a partir da hora atual (ou 08:20 se fora do expediente)
+  const nowMin = timeToMinutes(nowTime());
+  let baseSlotIdx = DAILY_SLOTS_40M.findIndex(t => timeToMinutes(t) + 25 >= nowMin);
+  if (baseSlotIdx === -1) baseSlotIdx = 0;
+
+  let slotCursor = baseSlotIdx;
+  let totalBlocksElapsed = 0;
+
+  db.queue.forEach((q, idx) => {
+    const skippedVips = [];
+    // Pula os horários que já estão reservados por Assinantes Gold VIP / Club hoje!
+    while (slotCursor < DAILY_SLOTS_40M.length && vipTodayMap.has(DAILY_SLOTS_40M[slotCursor])) {
+      const vipInfo = vipTodayMap.get(DAILY_SLOTS_40M[slotCursor]);
+      skippedVips.push(`${vipInfo.time} (${vipInfo.name.split(' ')[0]} ${vipInfo.plan})`);
+      slotCursor++;
+      totalBlocksElapsed++;
+    }
+
+    const assignedTime = DAILY_SLOTS_40M[slotCursor] || `Extra #${idx + 1}`;
+    q.status = totalBlocksElapsed === 0 ? 'in_chair' : 'waiting';
+    q.estMin = totalBlocksElapsed * CUT_DURATION_MIN;
+    q.assignedTime = assignedTime;
+    q.slotLabel = `${todayLabel} às ${assignedTime}`;
+    q.skippedVip = skippedVips.length > 0 ? skippedVips.join(', ') : null;
+
+    slotCursor++;
+    totalBlocksElapsed++;
+  });
+
+  return { todayLabel, vipTodayList: Array.from(vipTodayMap.values()) };
+}
+
+// Blindagem Anti-Vazamento de Dados (LGPD): Remove CPFs, PINs, Telefones e Livro Caixa da rota pública
+function sanitizeDbForRole(db, req) {
+  const { todayLabel, vipTodayList } = recalculateQueueAndSlots(db);
+
+  const bookedSlots = [];
+  // 1. Horários reservados pelos assinantes Gold VIP e Club
+  (db.members || []).forEach(m => {
+    if (m.status === 'active' || m.status === 'rescheduled') {
+      (m.scheduledDays || []).forEach(slot => {
+        bookedSlots.push({ memberId: m.id, slot, source: 'vip', plan: m.plan });
+      });
+    }
+  });
+  // 2. Horários de hoje já ocupados por clientes na Fila Ao Vivo (impede que um assinante marque por cima de quem já está na fila!)
+  (db.queue || []).forEach(q => {
+    if (q.slotLabel) {
+      bookedSlots.push({ memberId: q.memberId || 'queue', slot: q.slotLabel, source: 'queue', name: q.name });
+    }
+  });
+
   if (isAdminRequest(req)) {
-    return { ...db, bookedSlots };
+    return { ...db, bookedSlots, todayLabel, todayVipList: vipTodayList, cutDurationMin: CUT_DURATION_MIN };
   }
   return {
     shop: {
@@ -199,6 +288,9 @@ function sanitizeDbForRole(db, req) {
       singleCutPrice: db.shop.singleCutPrice,
       rescheduleFee: db.shop.rescheduleFee
     },
+    cutDurationMin: CUT_DURATION_MIN,
+    todayLabel,
+    todayVipList: vipTodayList,
     members: db.members.map(m => ({
       id: m.id,
       name: m.name,
@@ -666,19 +758,28 @@ const server = http.createServer((req, res) => {
           return send(400, { error: `Seu plano permite reservar até ${maxDays} horários por mês.` });
         }
 
-        // Verifica se algum outro cliente já reservou exatamente o mesmo Dia + Horário (ex: "Sáb 17/10 às 09:30")
+        recalculateQueueAndSlots(db);
+
+        // Verifica conflito com outros assinantes OU com clientes que já estão na Fila Ao Vivo naquele horário de hoje!
         const takenByOthers = new Set();
         db.members.forEach(other => {
           if (other.id !== m.id && (other.status === 'active' || other.status === 'rescheduled')) {
             (other.scheduledDays || []).forEach(s => takenByOthers.add(s));
           }
         });
+        (db.queue || []).forEach(q => {
+          if (q.slotLabel && q.memberId !== m.id) {
+            takenByOthers.add(q.slotLabel);
+          }
+        });
+
         const conflict = days.find(s => takenByOthers.has(s));
         if (conflict) {
-          return send(409, { error: `O horário "${conflict}" já foi reservado por outro cliente! Escolha outro horário livre.` });
+          return send(409, { error: `O horário "${conflict}" já está ocupado na fila/agenda! Escolha outro horário livre.` });
         }
 
         m.scheduledDays = days;
+        recalculateQueueAndSlots(db);
         saveDb(db);
         return send(200, { ok: true, state: sanitizeDbForRole(db, req) });
       }
@@ -751,7 +852,7 @@ const server = http.createServer((req, res) => {
         return send(200, { received: true, event, memberUpdated: member?.name || null });
       }
 
-      // Fila por Ordem de Chegada
+      // Fila por Ordem de Chegada (40 min por corte • Respeita e desvia dos horários reservados Gold VIP / Club!)
       if (req.method === 'POST' && urlPath === '/api/queue/join') {
         const member = db.members.find(m => m.id === payload.memberId);
         if (member && member.status === 'overdue') {
@@ -761,28 +862,31 @@ const server = http.createServer((req, res) => {
         if (!member && guestName.length < 2) {
           return send(400, { error: 'Informe seu nome para entrar na fila por ordem de chegada.' });
         }
-        const isActiveSub = member && member.status === 'active';
-        const activeCount = db.queue.length;
+        const isActiveSub = member && (member.status === 'active' || member.status === 'rescheduled');
         db.queue.push({
           id: 'q' + Date.now(),
           memberId: isActiveSub ? member.id : null,
           name: member ? member.name : guestName,
           tag: isActiveSub ? member.plan.split(' (')[0] : 'Avulso R$ 40',
           service: clean(payload.service || (isActiveSub ? member.visagism.cut : 'Corte Ordem de Chegada (R$ 40)')),
-          status: activeCount === 0 ? 'in_chair' : 'waiting',
+          status: 'waiting',
           joinedAt: nowTime(),
-          estMin: activeCount * 18
+          estMin: 0
         });
+        recalculateQueueAndSlots(db);
         saveDb(db);
         return send(200, db);
       }
 
-      // Relocação de Dia com Antecedência
+      // Relocação de Dia com Antecedência (Libera a vaga na fila de hoje imediatamente para não travar em 1º!)
       if (req.method === 'POST' && urlPath === '/api/queue/relocate') {
-        const item = db.queue.find(q => q.id === payload.queueId) || db.queue[db.queue.length - 1];
-        if (!item) return send(404, { error: 'Você não está na fila no momento.' });
-        item.status = 'relocated';
-        item.service = `Relocado c/ antecedência (${clean(payload.newDay || 'Sábado')}) • Crédito mantido`;
+        const idx = db.queue.findIndex(q => q.id === payload.queueId);
+        const targetIdx = idx >= 0 ? idx : db.queue.length - 1;
+        if (targetIdx < 0 || !db.queue[targetIdx]) {
+          return send(404, { error: 'Nenhum atendimento na fila no momento para relocar.' });
+        }
+        db.queue.splice(targetIdx, 1);
+        recalculateQueueAndSlots(db);
         saveDb(db);
         return send(200, db);
       }
@@ -807,9 +911,7 @@ const server = http.createServer((req, res) => {
           });
         }
         db.queue.splice(idx, 1);
-        const next = db.queue.find(q => q.status === 'waiting');
-        if (next) next.status = 'in_chair';
-        db.queue.filter(q => q.status === 'waiting').forEach((q, i) => { q.estMin = (i + 1) * 18; });
+        recalculateQueueAndSlots(db);
         saveDb(db);
         return send(200, db);
       }

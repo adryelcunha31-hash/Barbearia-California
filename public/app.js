@@ -706,38 +706,96 @@ function renderQueueAndMember() {
     }
   }
 
-  document.getElementById('hero-queue-count').textContent = `${state.queue.length} na fila`;
-  const waitMin = state.queue.filter(q => q.status === 'waiting').length * 18;
-  document.getElementById('queue-est-label').textContent = waitMin === 0 ? 'Sem espera' : `~${waitMin} min`;
+  const queueList = Array.isArray(state?.queue) ? state.queue : [];
+  const todayVips = Array.isArray(state?.todayVipList) ? state.todayVipList : [];
+  const cutMin = state?.cutDurationMin || 40;
 
-  document.getElementById('live-queue-container').innerHTML = state.queue.length === 0
-    ? `<div class="p-5 rounded-2xl subtle-ln text-center text-xs sm:text-sm opacity-80">💈 <strong>Cadeira livre agora!</strong> Nenhum cliente aguardando na fila — entre abaixo para ser atendido imediatamente.</div>`
-    : state.queue.map((q, idx) => `
-      <div class="p-3.5 sm:p-4 rounded-2xl flex items-center justify-between gap-3 subtle-ln">
-        <div class="flex items-center gap-3 min-w-0">
-          <div class="w-9 h-9 rounded-xl font-mono-ln font-bold text-xs flex items-center justify-center shrink-0 ${
-            q.status === 'in_chair' ? 'btn-ln-primary' : 'card-ln'
-          }">
-            ${q.status === 'in_chair' ? '✂' : `${idx + 1}º`}
-          </div>
-          <div class="min-w-0">
-            <div class="flex items-center gap-2">
-              <span class="font-bold text-sm truncate">${q.name}</span>
-              <span class="text-[10px] px-2 py-0.5 rounded-full card-ln font-semibold shrink-0">${q.tag}</span>
+  // Monta linha do tempo unificada: Fila por Ordem de Chegada + Horários Reservados Hoje (Gold VIP & Club)
+  const unifiedEntries = [
+    ...queueList.map((q, idx) => ({
+      kind: 'queue',
+      id: q.id,
+      name: q.name,
+      tag: q.tag,
+      service: q.service,
+      status: q.status,
+      joinedAt: q.joinedAt,
+      assignedTime: q.assignedTime || '08:20',
+      estMin: typeof q.estMin === 'number' ? q.estMin : idx * cutMin,
+      skippedVip: q.skippedVip || null,
+      orderIdx: idx + 1
+    })),
+    ...todayVips.map(v => ({
+      kind: 'vip_reserved',
+      id: 'vip_' + v.time,
+      name: v.name,
+      tag: v.plan,
+      service: `${v.service} • Horário Exclusivo Agendado`,
+      assignedTime: v.time,
+      estMin: null
+    }))
+  ].sort((a, b) => String(a.assignedTime).localeCompare(String(b.assignedTime)));
+
+  document.getElementById('hero-queue-count').textContent = `${queueList.length} na fila`;
+  const lastQueueItem = queueList[queueList.length - 1];
+  const nextWaitMin = queueList.length === 0 ? 0 : (lastQueueItem.estMin || 0) + cutMin;
+  document.getElementById('queue-est-label').textContent =
+    nextWaitMin === 0 ? 'Sem espera (Livre)' : `~${nextWaitMin} min (${cutMin}m/corte)`;
+
+  document.getElementById('live-queue-container').innerHTML = unifiedEntries.length === 0
+    ? `<div class="p-5 rounded-2xl subtle-ln text-center text-xs sm:text-sm opacity-80">💈 <strong>Cadeira livre agora!</strong> Nenhum cliente na fila ou agendado neste horário (${cutMin} min por corte).</div>`
+    : unifiedEntries.map(item => {
+      if (item.kind === 'vip_reserved') {
+        return `
+          <div class="p-3.5 sm:p-4 rounded-2xl flex items-center justify-between gap-3 card-ln border border-[#d96b43]/60">
+            <div class="flex items-center gap-3 min-w-0">
+              <div class="w-9 h-9 rounded-xl btn-ln-primary font-mono-ln font-bold text-xs flex items-center justify-center shrink-0">
+                👑
+              </div>
+              <div class="min-w-0">
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="font-extrabold text-sm truncate">${item.name}</span>
+                  <span class="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold shrink-0">${item.tag} • Prioridade</span>
+                </div>
+                <p class="text-xs opacity-85 truncate">📅 Reservado no Painel VIP para <strong>Hoje às ${item.assignedTime}</strong> (${cutMin} min reservados)</p>
+              </div>
             </div>
-            <p class="text-xs opacity-75 truncate">${q.service} • Chegada às ${q.joinedAt}</p>
+            <span class="font-mono-ln text-xs font-extrabold text-[var(--accent)] shrink-0">
+              ⏰ ${item.assignedTime}
+            </span>
           </div>
+        `;
+      }
+
+      return `
+        <div class="p-3.5 sm:p-4 rounded-2xl flex items-center justify-between gap-3 subtle-ln">
+          <div class="flex items-center gap-3 min-w-0">
+            <div class="w-9 h-9 rounded-xl font-mono-ln font-bold text-xs flex items-center justify-center shrink-0 ${
+              item.status === 'in_chair' ? 'btn-ln-primary' : 'card-ln'
+            }">
+              ${item.status === 'in_chair' ? '✂' : `${item.orderIdx}º`}
+            </div>
+            <div class="min-w-0">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="font-bold text-sm truncate">${item.name}</span>
+                <span class="text-[10px] px-2 py-0.5 rounded-full card-ln font-semibold shrink-0">${item.tag}</span>
+                <span class="text-[10px] font-mono-ln px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-bold shrink-0">⏰ Slot ${item.assignedTime}</span>
+              </div>
+              <p class="text-xs opacity-75 truncate">${item.service} • Chegada às ${item.joinedAt}</p>
+              ${item.skippedVip ? `<p class="text-[11px] text-amber-400 font-semibold mt-0.5">⚡ Horário ajustado p/ ${item.assignedTime} (desviou de reserva VIP: ${item.skippedVip})</p>` : ''}
+            </div>
+          </div>
+          <span class="font-mono-ln text-xs font-bold shrink-0 ${item.status === 'in_chair' ? 'text-[var(--accent)]' : ''}">
+            ${item.status === 'in_chair' ? `Na Cadeira (${item.assignedTime})` : `~${item.estMin} min`}
+          </span>
         </div>
-        <span class="font-mono-ln text-xs font-bold shrink-0 ${q.status === 'in_chair' ? 'text-[var(--accent)]' : ''}">
-          ${q.status === 'in_chair' ? 'Na Cadeira' : q.status === 'relocated' ? 'Relocado' : `~${q.estMin}m`}
-        </span>
-      </div>
-    `).join('');
+      `;
+    }).join('');
 }
 
 async function handleJoinQueue() {
   try {
-    const m = state.members.find(x => x.id === currentMemberId);
+    const m = getActiveMember();
     const guestInput = document.getElementById('queue-guest-name');
     const guestName = guestInput ? guestInput.value.trim() : '';
 
@@ -746,14 +804,18 @@ async function handleJoinQueue() {
       return toast('Digite seu nome no campo acima para entrar na fila!');
     }
 
-    state = await api('/api/queue/join', {
+    const res = await api('/api/queue/join', {
       memberId: m ? m.id : null,
       name: m ? m.name : guestName,
       service: m ? `${m.visagism.cut} (Assinatura)` : `Corte ${VISAGISM_DB[currentShape].cut} (R$ 40)`
     });
+    updateState(res);
     if (guestInput) guestInput.value = '';
-    renderQueueAndMember();
-    toast('Você entrou na fila por ordem de chegada!');
+    renderAll();
+    const myEntry = (state.queue || [])[state.queue.length - 1];
+    toast(myEntry?.skippedVip
+      ? `⚡ Você entrou na fila! Horário alocado às ${myEntry.assignedTime} (respeitando reserva VIP de ${myEntry.skippedVip}).`
+      : `✂ Você entrou na fila! Atendimento previsto às ${myEntry?.assignedTime || 'agora'} (40 min/corte).`);
   } catch (e) {
     toast(e.message);
   }
@@ -761,10 +823,12 @@ async function handleJoinQueue() {
 
 async function handleRelocateDay() {
   try {
-    const qItem = state.queue.find(q => q.memberId === currentMemberId) || state.queue[state.queue.length - 1];
-    state = await api('/api/queue/relocate', { queueId: qItem?.id, newDay: 'Sábado (Manhã)' });
-    renderQueueAndMember();
-    toast('Dia relocado com antecedência! Crédito do mês preservado.');
+    const qList = state?.queue || [];
+    const qItem = qList.find(q => q.memberId === currentMemberId) || qList[qList.length - 1];
+    const res = await api('/api/queue/relocate', { queueId: qItem?.id, newDay: 'Sábado (Manhã)' });
+    updateState(res);
+    renderAll();
+    toast('📅 Vaga de hoje liberada e relocada com antecedência! Fila de 40 min recalculada.');
   } catch (e) {
     toast(e.message);
   }
@@ -1603,19 +1667,23 @@ const BAR_STORE_PRODUCTS = [
   { id: 'balm', name: 'Kit Óleo & Balm Hidratante p/ Barba', category: '🧔 Produto Físico', basePrice: 55.00, icon: '🧴' }
 ];
 
-// Grade de horários diários (Manhã até 11:00 | Parada Almoço 12:00-13:30 | Tarde/Noite a partir de 13:30)
+// Grade de horários diários de 40 em 40 min (Manhã 08:20-11:40 | Almoço 11:40-13:20 | Tarde/Noite 13:20-20:00)
 const DAILY_TIME_SLOTS = [
-  { time: '08:30', period: 'Manhã' },
-  { time: '09:30', period: 'Manhã' },
-  { time: '10:15', period: 'Manhã' },
+  { time: '08:20', period: 'Manhã' },
+  { time: '09:00', period: 'Manhã' },
+  { time: '09:40', period: 'Manhã' },
+  { time: '10:20', period: 'Manhã' },
   { time: '11:00', period: 'Manhã' },
-  { time: '13:30', period: 'Tarde' },
-  { time: '14:30', period: 'Tarde' },
-  { time: '15:30', period: 'Tarde' },
-  { time: '16:30', period: 'Tarde' },
-  { time: '17:30', period: 'Noite' },
-  { time: '18:30', period: 'Noite' },
-  { time: '19:30', period: 'Noite' }
+  { time: '13:20', period: 'Tarde' },
+  { time: '14:00', period: 'Tarde' },
+  { time: '14:40', period: 'Tarde' },
+  { time: '15:20', period: 'Tarde' },
+  { time: '16:00', period: 'Tarde' },
+  { time: '16:40', period: 'Tarde' },
+  { time: '17:20', period: 'Noite' },
+  { time: '18:00', period: 'Noite' },
+  { time: '18:40', period: 'Noite' },
+  { time: '19:20', period: 'Noite' }
 ];
 
 function getAvailableMonthDays() {
@@ -1839,23 +1907,24 @@ function renderVipArea() {
     `;
   }).join('');
 
-  // 2. Renderiza os Horários do Dia Selecionado (ex: 08:30, 09:30, 10:15, 11:00 | Almoço | 13:30..19:30)
+  // 2. Renderiza os Horários de 40 em 40 min do Dia Selecionado (Sincronizado c/ Fila Ao Vivo e Assinantes)
   if (activeDayTitle) {
-    activeDayTitle.textContent = `⏰ 2. Escolha o Horário em ${activeInspectDay}:`;
+    activeDayTitle.textContent = `⏰ 2. Horários (40 min/corte) em ${activeInspectDay}:`;
   }
   if (timesGrid) {
     timesGrid.innerHTML = DAILY_TIME_SLOTS.map(slotObj => {
       const fullSlot = `${activeInspectDay} às ${slotObj.time}`;
       const isMine = selectedCalendarDays.includes(fullSlot);
-      const isTakenByOther = (state?.bookedSlots || []).some(
+      const takenEntry = (state?.bookedSlots || []).find(
         b => b.slot === fullSlot && b.memberId !== currentMemberId
       );
 
-      if (isTakenByOther) {
+      if (takenEntry) {
+        const isFromQueue = takenEntry.source === 'queue';
         return `
-          <button disabled class="p-2 rounded-xl text-center subtle-ln opacity-40 cursor-not-allowed border border-transparent">
+          <button disabled class="p-2 rounded-xl text-center subtle-ln opacity-45 cursor-not-allowed border border-transparent" title="${isFromQueue ? 'Horário já ocupado por cliente na Fila Ao Vivo' : 'Horário já reservado por outro Assinante'}">
             <div class="text-xs font-mono-ln font-bold line-through">${slotObj.time}</div>
-            <div class="text-[9px] text-rose-400 font-bold">🔒 Ocupado</div>
+            <div class="text-[9px] text-rose-400 font-bold">${isFromQueue ? '🔒 Na Fila' : '🔒 Reservado'}</div>
           </button>
         `;
       }
@@ -1868,7 +1937,7 @@ function renderVipArea() {
         }">
           <div class="text-xs font-mono-ln font-extrabold">${slotObj.time}</div>
           <div class="text-[9px] font-bold ${isMine ? 'text-white' : 'text-emerald-400'}">
-            ${isMine ? '✓ Reservado' : `🟢 ${slotObj.period}`}
+            ${isMine ? '✓ Seu Horário' : `🟢 ${slotObj.period}`}
           </div>
         </button>
       `;
